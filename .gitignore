@@ -22,3 +22,10 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Архивы и временные файлы
+*.rar
+*.zip
+*.7z
+*.tar.gz
+lagom-figma.rar

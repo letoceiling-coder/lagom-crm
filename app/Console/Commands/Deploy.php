@@ -139,6 +139,42 @@ class Deploy extends Command
         if ($hasChanges) {
             $this->line('  📝 Найдены изменения:');
             $this->line($output);
+            
+            // Проверяем на большие файлы
+            $files = explode("\n", $output);
+            $largeFiles = [];
+            foreach ($files as $file) {
+                $file = trim($file);
+                if (empty($file)) continue;
+                
+                // Извлекаем имя файла (убираем статус M, A, ?? и т.д.)
+                $fileName = preg_replace('/^[MADRC\?\s!]+/', '', $file);
+                $fileName = trim($fileName);
+                
+                // Проверяем расширения больших файлов
+                if (preg_match('/\.(rar|zip|7z|tar\.gz|tar)$/i', $fileName)) {
+                    $largeFiles[] = $fileName;
+                } elseif (file_exists($fileName)) {
+                    $size = filesize($fileName);
+                    // Предупреждаем о файлах больше 10MB
+                    if ($size > 10 * 1024 * 1024) {
+                        $sizeMB = round($size / 1024 / 1024, 2);
+                        $largeFiles[] = "{$fileName} ({$sizeMB} MB)";
+                    }
+                }
+            }
+            
+            if (!empty($largeFiles)) {
+                $this->newLine();
+                $this->warn('  ⚠️  Обнаружены большие файлы:');
+                foreach ($largeFiles as $file) {
+                    $this->warn("     - {$file}");
+                }
+                $this->warn('  💡 Рекомендуется добавить их в .gitignore перед коммитом');
+                if (!$this->confirm('  Продолжить с этими файлами?', false)) {
+                    throw new \Exception('Операция отменена. Добавьте большие файлы в .gitignore.');
+                }
+            }
         } else {
             $this->line('  ℹ️  Изменений не обнаружено');
         }
@@ -225,10 +261,23 @@ class Deploy extends Command
             return;
         }
 
-        $process = Process::run("git push origin {$branch}");
+        // Увеличиваем таймаут для git push (большие файлы могут требовать больше времени)
+        $process = Process::timeout(300) // 5 минут
+            ->run("git push origin {$branch}");
 
         if (!$process->successful()) {
-            throw new \Exception("Ошибка отправки в репозиторий:\n" . $process->errorOutput());
+            $errorOutput = $process->errorOutput();
+            
+            // Проверяем на таймаут
+            if (str_contains($errorOutput, 'timeout') || str_contains($errorOutput, 'exceeded')) {
+                throw new \Exception(
+                    "Таймаут отправки в репозиторий. Возможно, файлы слишком большие.\n" .
+                    "Проверьте, нет ли в коммите больших файлов (архивы, изображения и т.д.).\n" .
+                    "Рекомендуется добавить их в .gitignore."
+                );
+            }
+            
+            throw new \Exception("Ошибка отправки в репозиторий:\n" . $errorOutput);
         }
 
         $this->info("  ✅ Изменения отправлены в ветку: {$branch}");
@@ -259,10 +308,18 @@ class Deploy extends Command
 
         // Формируем правильный URL (убираем дублирование пути)
         $deployUrl = rtrim($serverUrl, '/');
-        // Проверяем, содержит ли URL уже путь /api/deploy
-        if (!str_contains($deployUrl, '/api/deploy')) {
-            $deployUrl .= '/api/deploy';
+        
+        // Убираем /api/deploy если он уже есть в URL (в любом месте)
+        if (str_contains($deployUrl, '/api/deploy')) {
+            // Находим позицию первого вхождения /api/deploy
+            $pos = strpos($deployUrl, '/api/deploy');
+            // Оставляем только часть до /api/deploy
+            $deployUrl = substr($deployUrl, 0, $pos);
+            $deployUrl = rtrim($deployUrl, '/');
         }
+        
+        // Добавляем /api/deploy
+        $deployUrl .= '/api/deploy';
 
         $this->line("  📡 URL: {$deployUrl}");
         $this->line("  🔑 Commit: " . substr($commitHash, 0, 7));
