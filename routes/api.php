@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\ChapterController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\DecisionBlockSettingsController;
+use App\Http\Controllers\Api\DeployController;
 use App\Http\Controllers\Api\v1\FolderController;
 use App\Http\Controllers\Api\v1\MediaController;
 use Illuminate\Support\Facades\Route;
@@ -83,5 +84,9 @@ Route::get('/public/banners/{slug}', [BannerController::class, 'getBySlug']);
 // Публичные маршруты для Decision Block (без авторизации)
 Route::get('/public/decision-block/chapters', [ChapterController::class, 'index']);
 Route::get('/public/decision-block/settings', [DecisionBlockSettingsController::class, 'show']);
+
+// Маршрут для деплоя (защищен токеном)
+Route::post('/deploy', [DeployController::class, 'deploy'])
+    ->middleware('deploy.token');
 
 

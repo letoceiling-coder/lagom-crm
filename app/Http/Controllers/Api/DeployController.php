@@ -1,0 +1,351 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Process;
+
+class DeployController extends Controller
+{
+    protected $phpPath;
+    protected $phpVersion;
+    protected $basePath;
+
+    public function __construct()
+    {
+        $this->basePath = base_path();
+    }
+
+    /**
+     * Выполнить деплой на сервере
+     */
+    public function deploy(Request $request)
+    {
+        $startTime = microtime(true);
+        Log::info('🚀 Начало деплоя', [
+            'ip' => $request->ip(),
+            'timestamp' => now()->toDateTimeString(),
+        ]);
+
+        $result = [
+            'success' => false,
+            'message' => '',
+            'data' => [],
+        ];
+
+        try {
+            // Определяем PHP путь
+            $this->phpPath = $this->getPhpPath();
+            $this->phpVersion = $this->getPhpVersion();
+            
+            Log::info("Используется PHP: {$this->phpPath} (версия: {$this->phpVersion})");
+
+            // Получаем текущий commit hash
+            $oldCommitHash = $this->getCurrentCommitHash();
+
+            // 1. Git pull
+            $gitPullResult = $this->handleGitPull();
+            $result['data']['git_pull'] = $gitPullResult['status'];
+            if (!$gitPullResult['success']) {
+                throw new \Exception("Ошибка git pull: {$gitPullResult['error']}");
+            }
+
+            // 2. Composer install
+            $composerResult = $this->handleComposerInstall();
+            $result['data']['composer_install'] = $composerResult['status'];
+            if (!$composerResult['success']) {
+                throw new \Exception("Ошибка composer install: {$composerResult['error']}");
+            }
+
+            // 3. Миграции
+            $migrationsResult = $this->runMigrations();
+            $result['data']['migrations'] = $migrationsResult;
+            if ($migrationsResult['status'] !== 'success') {
+                throw new \Exception("Ошибка миграций: {$migrationsResult['error']}");
+            }
+
+            // 4. Очистка кешей
+            $cacheResult = $this->clearAllCaches();
+            $result['data']['cache_cleared'] = $cacheResult['success'];
+
+            // 5. Оптимизация
+            $optimizeResult = $this->optimizeApplication();
+            $result['data']['optimized'] = $optimizeResult['success'];
+
+            // Получаем новый commit hash
+            $newCommitHash = $this->getCurrentCommitHash();
+
+            // Формируем успешный ответ
+            $result['success'] = true;
+            $result['message'] = 'Деплой успешно завершен';
+            $result['data'] = array_merge($result['data'], [
+                'php_version' => $this->phpVersion,
+                'php_path' => $this->phpPath,
+                'old_commit_hash' => $oldCommitHash,
+                'new_commit_hash' => $newCommitHash,
+                'commit_changed' => $oldCommitHash !== $newCommitHash,
+                'deployed_at' => now()->toDateTimeString(),
+                'duration_seconds' => round(microtime(true) - $startTime, 2),
+            ]);
+
+            Log::info('✅ Деплой успешно завершен', $result['data']);
+
+        } catch (\Exception $e) {
+            $result['message'] = $e->getMessage();
+            $result['data']['error'] = $e->getMessage();
+            $result['data']['trace'] = config('app.debug') ? $e->getTraceAsString() : null;
+            $result['data']['deployed_at'] = now()->toDateTimeString();
+            $result['data']['duration_seconds'] = round(microtime(true) - $startTime, 2);
+
+            Log::error('❌ Ошибка деплоя', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+
+        return response()->json($result, $result['success'] ? 200 : 500);
+    }
+
+    /**
+     * Определить путь к PHP
+     */
+    protected function getPhpPath(): string
+    {
+        // 1. Проверить явно указанный путь в .env
+        $phpPath = env('PHP_PATH');
+        if ($phpPath && $this->isPhpExecutable($phpPath)) {
+            return $phpPath;
+        }
+
+        // 2. Попробовать автоматически найти PHP
+        $possiblePaths = ['php8.2', 'php8.3', 'php8.1', 'php'];
+        foreach ($possiblePaths as $path) {
+            if ($this->isPhpExecutable($path)) {
+                return $path;
+            }
+        }
+
+        // 3. Fallback на 'php'
+        return 'php';
+    }
+
+    /**
+     * Проверить доступность PHP
+     */
+    protected function isPhpExecutable(string $path): bool
+    {
+        try {
+            // Проверка через which (Unix-like)
+            $result = shell_exec("which {$path} 2>/dev/null");
+            if ($result && trim($result)) {
+                return true;
+            }
+
+            // Проверка через exec (версия PHP)
+            exec("{$path} --version 2>&1", $output, $returnCode);
+            return $returnCode === 0;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Получить версию PHP
+     */
+    protected function getPhpVersion(): string
+    {
+        try {
+            exec("{$this->phpPath} --version 2>&1", $output, $returnCode);
+            if ($returnCode === 0 && isset($output[0])) {
+                preg_match('/PHP\s+(\d+\.\d+\.\d+)/', $output[0], $matches);
+                return $matches[1] ?? 'unknown';
+            }
+        } catch (\Exception $e) {
+            // Ignore
+        }
+        return 'unknown';
+    }
+
+    /**
+     * Выполнить git pull
+     */
+    protected function handleGitPull(): array
+    {
+        try {
+            $process = Process::path($this->basePath)
+                ->run('git pull origin main');
+
+            if ($process->successful()) {
+                return [
+                    'success' => true,
+                    'status' => 'success',
+                    'output' => $process->output(),
+                ];
+            }
+
+            return [
+                'success' => false,
+                'status' => 'error',
+                'error' => $process->errorOutput() ?: $process->output(),
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Выполнить composer install
+     */
+    protected function handleComposerInstall(): array
+    {
+        try {
+            $process = Process::path($this->basePath)
+                ->run('composer install --no-dev --optimize-autoloader --no-interaction');
+
+            if ($process->successful()) {
+                return [
+                    'success' => true,
+                    'status' => 'success',
+                    'output' => $process->output(),
+                ];
+            }
+
+            return [
+                'success' => false,
+                'status' => 'error',
+                'error' => $process->errorOutput() ?: $process->output(),
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Выполнить миграции
+     */
+    protected function runMigrations(): array
+    {
+        try {
+            $process = Process::path($this->basePath)
+                ->run("{$this->phpPath} artisan migrate --force");
+
+            if ($process->successful()) {
+                // Парсим вывод для определения количества миграций
+                $output = $process->output();
+                preg_match_all('/Migrating:\s+(\d{4}_\d{2}_\d{2}_\d{6}_[\w_]+)/', $output, $matches);
+                $migrationsRun = count($matches[0]);
+
+                return [
+                    'status' => 'success',
+                    'migrations_run' => $migrationsRun,
+                    'message' => $migrationsRun > 0 
+                        ? "Выполнено миграций: {$migrationsRun}" 
+                        : 'Новых миграций не обнаружено',
+                    'output' => $output,
+                ];
+            }
+
+            return [
+                'status' => 'error',
+                'error' => $process->errorOutput() ?: $process->output(),
+            ];
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Очистить все кеши
+     */
+    protected function clearAllCaches(): array
+    {
+        $commands = [
+            'config:clear',
+            'cache:clear',
+            'route:clear',
+            'view:clear',
+            'optimize:clear',
+        ];
+
+        $results = [];
+        foreach ($commands as $command) {
+            try {
+                $process = Process::path($this->basePath)
+                    ->run("{$this->phpPath} artisan {$command}");
+
+                $results[$command] = $process->successful();
+            } catch (\Exception $e) {
+                $results[$command] = false;
+                Log::warning("Ошибка очистки кеша: {$command}", ['error' => $e->getMessage()]);
+            }
+        }
+
+        return [
+            'success' => !in_array(false, $results, true),
+            'details' => $results,
+        ];
+    }
+
+    /**
+     * Оптимизировать приложение
+     */
+    protected function optimizeApplication(): array
+    {
+        $commands = [
+            'config:cache',
+            'route:cache',
+            'view:cache',
+        ];
+
+        $results = [];
+        foreach ($commands as $command) {
+            try {
+                $process = Process::path($this->basePath)
+                    ->run("{$this->phpPath} artisan {$command}");
+
+                $results[$command] = $process->successful();
+            } catch (\Exception $e) {
+                $results[$command] = false;
+                Log::warning("Ошибка оптимизации: {$command}", ['error' => $e->getMessage()]);
+            }
+        }
+
+        return [
+            'success' => !in_array(false, $results, true),
+            'details' => $results,
+        ];
+    }
+
+    /**
+     * Получить текущий commit hash
+     */
+    protected function getCurrentCommitHash(): ?string
+    {
+        try {
+            $process = Process::path($this->basePath)
+                ->run('git rev-parse HEAD');
+
+            if ($process->successful()) {
+                return trim($process->output());
+            }
+        } catch (\Exception $e) {
+            // Ignore
+        }
+        return null;
+    }
+}
+
