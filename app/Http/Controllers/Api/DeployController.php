@@ -175,8 +175,17 @@ class DeployController extends Controller
     protected function handleGitPull(): array
     {
         try {
+            // Настройка безопасной директории для git (решает проблему dubious ownership)
+            $this->ensureGitSafeDirectory();
+
+            // Выполняем git pull с дополнительной настройкой безопасной директории
+            // Используем как параметр -c, так и переменную окружения для максимальной надежности
+            $safeDirectoryPath = escapeshellarg($this->basePath);
             $process = Process::path($this->basePath)
-                ->run('git pull origin main');
+                ->env([
+                    'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
+                ])
+                ->run("git -c safe.directory={$safeDirectoryPath} pull origin main");
 
             if ($process->successful()) {
                 return [
@@ -197,6 +206,41 @@ class DeployController extends Controller
                 'status' => 'error',
                 'error' => $e->getMessage(),
             ];
+        }
+    }
+
+    /**
+     * Настроить безопасную директорию для git
+     * Решает проблему "detected dubious ownership in repository"
+     */
+    protected function ensureGitSafeDirectory(): void
+    {
+        try {
+            // Сначала пытаемся добавить в глобальную конфигурацию
+            $process = Process::path($this->basePath)
+                ->run("git config --global --add safe.directory {$this->basePath}");
+
+            // Если глобально не получилось, пробуем локально
+            if (!$process->successful()) {
+                $processLocal = Process::path($this->basePath)
+                    ->run("git config --local --add safe.directory {$this->basePath}");
+                
+                // Если и локально не получилось, используем переменную окружения
+                if (!$processLocal->successful()) {
+                    // Используем переменную окружения для текущей сессии
+                    putenv("GIT_CEILING_DIRECTORIES=" . dirname($this->basePath));
+                    
+                    // Альтернативный способ - через GIT_CONFIG
+                    $gitConfig = "safe.directory={$this->basePath}";
+                    putenv("GIT_CONFIG_GLOBAL={$gitConfig}");
+                }
+            }
+        } catch (\Exception $e) {
+            // Игнорируем ошибки настройки - возможно, уже настроено или нет прав
+            Log::warning('Не удалось настроить safe.directory для git', [
+                'path' => $this->basePath,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
