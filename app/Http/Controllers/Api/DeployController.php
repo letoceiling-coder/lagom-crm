@@ -40,7 +40,7 @@ class DeployController extends Controller
             // Определяем PHP путь
             $this->phpPath = $this->getPhpPath();
             $this->phpVersion = $this->getPhpVersion();
-            
+
             Log::info("Используется PHP: {$this->phpPath} (версия: {$this->phpVersion})");
 
             // Получаем текущий commit hash
@@ -86,12 +86,12 @@ class DeployController extends Controller
 
             // 7. Финальная очистка файлов разработки (в конце, после всех операций)
             $this->cleanDevelopmentFiles();
-            
+
             // 8. Запускаем Artisan команду для очистки hot файла (дополнительная проверка)
             try {
                 $cleanHotProcess = Process::path($this->basePath)
                     ->run("{$this->phpPath} artisan clean:hot --force");
-                
+
                 if ($cleanHotProcess->successful()) {
                     Log::info('Файл public/hot очищен через Artisan команду');
                 }
@@ -205,15 +205,15 @@ class DeployController extends Controller
             // Проверяем статус git перед pull
             $statusProcess = Process::path($this->basePath)
                 ->run('git status --porcelain');
-            
+
             $hasChanges = !empty(trim($statusProcess->output()));
-            
+
             // Если есть локальные изменения, сохраняем их в stash
             if ($hasChanges) {
                 Log::info('Обнаружены локальные изменения, сохраняем в stash...');
                 $stashProcess = Process::path($this->basePath)
                     ->run('git stash push -m "Auto-stash before deploy ' . now()->toDateTimeString() . '"');
-                
+
                 if (!$stashProcess->successful()) {
                     Log::warning('Не удалось сохранить изменения в stash', [
                         'error' => $stashProcess->errorOutput(),
@@ -273,9 +273,9 @@ class DeployController extends Controller
             // Получаем список неотслеживаемых файлов
             $untrackedProcess = Process::path($this->basePath)
                 ->run('git ls-files --others --exclude-standard');
-            
+
             $untrackedFiles = array_filter(explode("\n", trim($untrackedProcess->output())));
-            
+
             if (empty($untrackedFiles)) {
                 return;
             }
@@ -319,12 +319,12 @@ class DeployController extends Controller
             if (!$process->successful()) {
                 $processLocal = Process::path($this->basePath)
                     ->run("git config --local --add safe.directory {$this->basePath}");
-                
+
                 // Если и локально не получилось, используем переменную окружения
                 if (!$processLocal->successful()) {
                     // Используем переменную окружения для текущей сессии
                     putenv("GIT_CEILING_DIRECTORIES=" . dirname($this->basePath));
-                    
+
                     // Альтернативный способ - через GIT_CONFIG
                     $gitConfig = "safe.directory={$this->basePath}";
                     putenv("GIT_CONFIG_GLOBAL={$gitConfig}");
@@ -347,7 +347,7 @@ class DeployController extends Controller
         try {
             // Получаем путь к composer
             $composerPath = $this->getComposerPath();
-            
+
             // Определяем HOME директорию (для composer)
             // Попробуем получить из пользователя или использовать базовую директорию
             $homeDir = getenv('HOME');
@@ -356,12 +356,12 @@ class DeployController extends Controller
                 $projectUser = posix_getpwuid(posix_geteuid());
                 $homeDir = $projectUser['dir'] ?? '/tmp';
             }
-            
+
             // Используем PHP 8.2 для запуска composer
             // Добавляем --no-scripts временно, чтобы избежать проблем с prePackageUninstall
             // Затем запустим скрипты отдельно после успешной установки
             $command = "{$this->phpPath} {$composerPath} install --no-dev --optimize-autoloader --no-interaction --no-scripts";
-            
+
             // Устанавливаем переменные окружения для composer и увеличиваем таймаут
             $process = Process::path($this->basePath)
                 ->timeout(600) // 10 минут для composer install
@@ -371,7 +371,7 @@ class DeployController extends Controller
                     'COMPOSER_DISABLE_XDEBUG_WARN' => '1',
                 ])
                 ->run($command);
-            
+
             // Если composer install прошел успешно, запускаем скрипты отдельно
             if ($process->successful()) {
                 // Запускаем post-install скрипты
@@ -383,7 +383,7 @@ class DeployController extends Controller
                         'COMPOSER_HOME' => $homeDir . '/.composer',
                     ])
                     ->run($scriptsCommand);
-                
+
                 // Игнорируем ошибки скриптов - они не критичны
                 if (!$scriptsProcess->successful()) {
                     Log::warning('Composer post-install scripts failed', [
@@ -469,8 +469,8 @@ class DeployController extends Controller
                 return [
                     'status' => 'success',
                     'migrations_run' => $migrationsRun,
-                    'message' => $migrationsRun > 0 
-                        ? "Выполнено миграций: {$migrationsRun}" 
+                    'message' => $migrationsRun > 0
+                        ? "Выполнено миграций: {$migrationsRun}"
                         : 'Новых миграций не обнаружено',
                     'output' => $output,
                 ];
@@ -553,21 +553,21 @@ class DeployController extends Controller
 
             foreach ($filesToRemove as $file) {
                 $filePath = $this->basePath . '/' . trim($file, '/');
-                
+
                 // Удаляем через shell команды (наиболее надежно)
                 $escapedPath = escapeshellarg($filePath);
                 $publicPath = escapeshellarg($this->basePath . '/public');
-                
+
                 // Множественные способы удаления для максимальной надежности
                 Process::path($this->basePath)
                     ->run("rm -f {$escapedPath} 2>/dev/null || true");
-                
+
                 Process::path($this->basePath)
                     ->run("rm -rf {$escapedPath} 2>/dev/null || true");
-                
+
                 Process::path($this->basePath)
                     ->run("find {$publicPath} -maxdepth 1 -name 'hot' -delete 2>/dev/null || true");
-                
+
                 // Через PHP функции (как дополнительная проверка)
                 if (file_exists($filePath)) {
                     if (is_file($filePath)) {
@@ -578,12 +578,12 @@ class DeployController extends Controller
                     Log::info("Удален файл разработки: {$file}");
                 }
             }
-            
+
             // Финальная проверка через 2 секунды (на случай асинхронного создания)
             Process::path($this->basePath)
                 ->timeout(5)
                 ->run("sleep 2 && find " . escapeshellarg($this->basePath . '/public') . " -maxdepth 1 -name 'hot' -delete 2>/dev/null || true");
-            
+
             // Дополнительно: запускаем Artisan команду для гарантированного удаления
             try {
                 Process::path($this->basePath)
@@ -592,7 +592,7 @@ class DeployController extends Controller
             } catch (\Exception $e) {
                 // Игнорируем ошибки
             }
-                
+
         } catch (\Exception $e) {
             Log::warning('Ошибка при очистке файлов разработки', [
                 'error' => $e->getMessage(),
@@ -708,3 +708,4 @@ class DeployController extends Controller
     }
 }
 
+//exit()
