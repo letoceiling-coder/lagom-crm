@@ -202,9 +202,17 @@ class DeployController extends Controller
             // Настройка безопасной директории для git (решает проблему dubious ownership)
             $this->ensureGitSafeDirectory();
 
+            // Определяем безопасную директорию для всех git команд
+            $safeDirectoryPath = escapeshellarg($this->basePath);
+            $gitEnv = [
+                'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
+            ];
+            $gitBaseCmd = "git -c safe.directory={$safeDirectoryPath}";
+
             // Проверяем статус git перед pull
             $statusProcess = Process::path($this->basePath)
-                ->run('git status --porcelain');
+                ->env($gitEnv)
+                ->run("{$gitBaseCmd} status --porcelain 2>&1");
 
             $hasChanges = !empty(trim($statusProcess->output()));
 
@@ -212,7 +220,8 @@ class DeployController extends Controller
             if ($hasChanges) {
                 Log::info('Обнаружены локальные изменения, сохраняем в stash...');
                 $stashProcess = Process::path($this->basePath)
-                    ->run('git stash push -m "Auto-stash before deploy ' . now()->toDateTimeString() . '"');
+                    ->env($gitEnv)
+                    ->run("{$gitBaseCmd} stash push -m \"Auto-stash before deploy " . now()->toDateTimeString() . "\" 2>&1");
 
                 if (!$stashProcess->successful()) {
                     Log::warning('Не удалось сохранить изменения в stash', [
@@ -230,19 +239,15 @@ class DeployController extends Controller
 
             // Проверяем текущий статус Git
             $statusOutput = Process::path($this->basePath)
-                ->run('git status --short 2>&1');
+                ->env($gitEnv)
+                ->run("{$gitBaseCmd} status --short 2>&1");
             Log::info("📊 Текущий статус Git: " . trim($statusOutput->output() ?: 'чисто'));
-
-            // Выполняем git pull с дополнительной настройкой безопасной директории
-            $safeDirectoryPath = escapeshellarg($this->basePath);
 
             // 1. Сначала получаем последние изменения из репозитория
             Log::info("📥 Выполняем git fetch origin main...");
             $fetchProcess = Process::path($this->basePath)
-                ->env([
-                    'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
-                ])
-                ->run("git -c safe.directory={$safeDirectoryPath} fetch origin main 2>&1");
+                ->env($gitEnv)
+                ->run("{$gitBaseCmd} fetch origin main 2>&1");
 
             if (!$fetchProcess->successful()) {
                 Log::warning('⚠️ Не удалось выполнить git fetch', [
@@ -257,17 +262,16 @@ class DeployController extends Controller
 
             // 2. Проверяем, есть ли новые коммиты
             $checkAheadProcess = Process::path($this->basePath)
-                ->run("git rev-list HEAD..origin/main --count 2>&1");
+                ->env($gitEnv)
+                ->run("{$gitBaseCmd} rev-list HEAD..origin/main --count 2>&1");
             $commitsAhead = trim($checkAheadProcess->output() ?: '0');
             Log::info("📊 Новых коммитов для загрузки: {$commitsAhead}");
 
             // 3. Сбрасываем локальную ветку на origin/main (принудительное обновление)
             Log::info("🔄 Выполняем git reset --hard origin/main...");
             $process = Process::path($this->basePath)
-                ->env([
-                    'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
-                ])
-                ->run("git -c safe.directory={$safeDirectoryPath} reset --hard origin/main 2>&1");
+                ->env($gitEnv)
+                ->run("{$gitBaseCmd} reset --hard origin/main 2>&1");
 
             Log::info("Git reset output: " . trim($process->output() ?: 'нет вывода'));
             if ($process->errorOutput()) {
@@ -281,10 +285,8 @@ class DeployController extends Controller
 
                 // Если reset не удался, пробуем обычный pull
                 $process = Process::path($this->basePath)
-                    ->env([
-                        'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
-                    ])
-                    ->run("git -c safe.directory={$safeDirectoryPath} pull origin main --no-rebase --force");
+                    ->env($gitEnv)
+                    ->run("{$gitBaseCmd} pull origin main --no-rebase --force 2>&1");
             }
 
             // 3. Получаем новый commit после обновления
@@ -298,7 +300,8 @@ class DeployController extends Controller
                 // Показываем измененные файлы
                 try {
                     $diffProcess = Process::path($this->basePath)
-                        ->run("git diff --name-only {$beforeCommit} {$afterCommit} 2>&1");
+                        ->env($gitEnv)
+                        ->run("{$gitBaseCmd} diff --name-only {$beforeCommit} {$afterCommit} 2>&1");
 
                     $changedFiles = array_filter(explode("\n", trim($diffProcess->output())));
                     if (!empty($changedFiles)) {
@@ -324,7 +327,8 @@ class DeployController extends Controller
 
                 // Дополнительная проверка: проверяем, что это Git репозиторий
                 $gitCheckProcess = Process::path($this->basePath)
-                    ->run("git rev-parse --is-inside-work-tree 2>&1");
+                    ->env($gitEnv)
+                    ->run("{$gitBaseCmd} rev-parse --is-inside-work-tree 2>&1");
 
                 if (!$gitCheckProcess->successful() || trim($gitCheckProcess->output()) !== 'true') {
                     Log::error("❌ Это не Git репозиторий! Путь: {$this->basePath}");
@@ -336,7 +340,8 @@ class DeployController extends Controller
             // 5. Дополнительная проверка: список последних коммитов
             try {
                 $logProcess = Process::path($this->basePath)
-                    ->run("git log --oneline -3 2>&1");
+                    ->env($gitEnv)
+                    ->run("{$gitBaseCmd} log --oneline -3 2>&1");
                 $lastCommits = trim($logProcess->output());
                 if ($lastCommits) {
                     Log::info("📋 Последние 3 коммита:\n{$lastCommits}");
@@ -375,8 +380,14 @@ class DeployController extends Controller
     {
         try {
             // Получаем список неотслеживаемых файлов
+            $safeDirectoryPath = escapeshellarg($this->basePath);
+            $gitEnv = [
+                'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
+            ];
+            $gitBaseCmd = "git -c safe.directory={$safeDirectoryPath}";
             $untrackedProcess = Process::path($this->basePath)
-                ->run('git ls-files --others --exclude-standard');
+                ->env($gitEnv)
+                ->run("{$gitBaseCmd} ls-files --others --exclude-standard 2>&1");
 
             $untrackedFiles = array_filter(explode("\n", trim($untrackedProcess->output())));
 
@@ -799,8 +810,12 @@ class DeployController extends Controller
     protected function getCurrentCommitHash(): ?string
     {
         try {
+            $safeDirectoryPath = escapeshellarg($this->basePath);
             $process = Process::path($this->basePath)
-                ->run('git rev-parse HEAD 2>&1');
+                ->env([
+                    'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
+                ])
+                ->run("git -c safe.directory={$safeDirectoryPath} rev-parse HEAD 2>&1");
 
             if ($process->successful()) {
                 $hash = trim($process->output());
