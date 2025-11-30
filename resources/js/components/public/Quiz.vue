@@ -288,24 +288,51 @@ export default {
                     }),
                 });
 
-                // Проверяем тип ответа
-                const contentType = response.headers.get('content-type');
-                let result;
+                // Сначала получаем текст ответа для обработки
+                let responseText = '';
+                let result = null;
 
-                if (contentType && contentType.includes('application/json')) {
-                    result = await response.json();
-                } else {
-                    // Если ответ не JSON (например, HTML страница с ошибкой)
-                    const text = await response.text();
-                    console.error('Некорректный ответ от сервера:', text);
-                    throw new Error('Сервер вернул некорректный ответ. Пожалуйста, попробуйте еще раз.');
+                try {
+                    responseText = await response.text();
+                    
+                    // Пытаемся распарсить как JSON
+                    if (responseText) {
+                        try {
+                            result = JSON.parse(responseText);
+                        } catch (parseError) {
+                            console.error('Ошибка парсинга JSON:', parseError, 'Response text:', responseText.substring(0, 200));
+                            throw new Error('Сервер вернул некорректный ответ. Пожалуйста, попробуйте еще раз.');
+                        }
+                    }
+                } catch (textError) {
+                    console.error('Ошибка чтения ответа:', textError);
+                    throw new Error('Ошибка получения ответа от сервера');
                 }
 
-                if (response.ok && result && result.success) {
+                // Проверяем статус ответа
+                if (!response.ok) {
+                    const errorMessage = (result && result.message) || (result && result.error) || `Ошибка сервера: ${response.status} ${response.statusText}`;
+                    throw new Error(errorMessage);
+                }
+
+                // Проверяем наличие и корректность result
+                if (!result) {
+                    console.error('Сервер вернул пустой ответ. Response text:', responseText.substring(0, 200));
+                    throw new Error('Сервер вернул пустой ответ');
+                }
+
+                if (typeof result !== 'object') {
+                    console.error('Сервер вернул некорректный тип данных:', typeof result, result);
+                    throw new Error('Сервер вернул некорректный ответ');
+                }
+
+                // Проверяем success
+                if (result.success === true) {
                     isCompleted.value = true;
                     return { success: true, message: result.message || 'Спасибо за прохождение квиза!' };
                 } else {
-                    const errorMessage = result?.message || result?.error || 'Ошибка отправки результатов квиза';
+                    // Ответ успешный, но success = false или отсутствует
+                    const errorMessage = result.message || result.error || 'Ошибка отправки результатов квиза';
                     throw new Error(errorMessage);
                 }
             } catch (err) {

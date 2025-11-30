@@ -18,5 +18,35 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Отправка критических ошибок в Telegram
+        $exceptions->reportable(function (\Throwable $e): void {
+            // Проверяем, нужно ли отправлять ошибки
+            try {
+                $telegramSettings = \App\Models\TelegramSettings::getSettings();
+                if ($telegramSettings->is_enabled && $telegramSettings->send_errors) {
+                    // Отправляем только критические ошибки (500 и выше)
+                    $shouldSend = $e instanceof \Symfony\Component\HttpKernel\Exception\HttpException 
+                        ? $e->getStatusCode() >= 500 
+                        : true;
+                    
+                    if ($shouldSend) {
+                        $telegramService = new \App\Services\TelegramService();
+                        
+                        // Собираем контекст ошибки
+                        $context = [];
+                        if (request()) {
+                            $context['url'] = request()->fullUrl();
+                            $context['method'] = request()->method();
+                            if (auth()->check()) {
+                                $context['user_id'] = auth()->id();
+                            }
+                        }
+                        
+                        $telegramService->sendError($e, $context);
+                    }
+                }
+            } catch (\Throwable $telegramException) {
+                // Игнорируем ошибки отправки в Telegram, чтобы не создавать бесконечный цикл
+            }
+        });
     })->create();

@@ -25,6 +25,13 @@
         >
             <div class="flex items-center justify-between p-4 border-b border-border">
                 <h3 class="font-semibold text-foreground">Уведомления</h3>
+                <router-link
+                    to="/admin/notifications"
+                    class="text-sm text-blue-500 hover:text-blue-600 underline"
+                    @click="isOpen = false"
+                >
+                    Все уведомления
+                </router-link>
             </div>
             <div class="overflow-y-auto flex-1">
                 <div v-if="notifications.length === 0" class="p-4 text-center text-muted-foreground">
@@ -34,7 +41,7 @@
                     <div
                         v-for="notification in notifications"
                         :key="notification.id"
-                        @click="markAsRead(notification.id)"
+                        @click="handleNotificationClick(notification)"
                         :class="[
                             'p-4 hover:bg-accent/10 cursor-pointer transition-colors',
                             !notification.read ? 'bg-accent/5 border-l-2 border-accent' : ''
@@ -65,12 +72,14 @@
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useStore } from 'vuex';
+import { useRouter } from 'vue-router';
 import axios from 'axios';
 
 export default {
     name: 'NotificationDropdown',
     setup() {
         const store = useStore();
+        const router = useRouter();
         const isOpen = ref(false);
         // Фильтруем только непрочитанные уведомления
         const notifications = computed(() => {
@@ -84,6 +93,45 @@ export default {
             if (isOpen.value) {
                 store.dispatch('fetchNotifications');
             }
+        };
+
+        const handleNotificationClick = async (notification) => {
+            // Сначала проверяем данные, которые уже есть в уведомлении
+            let notificationData = notification.data;
+            let quizId = null;
+
+            if (notificationData && notificationData.quiz_id) {
+                quizId = notificationData.quiz_id;
+            } else {
+                // Если данных нет, загружаем полные данные уведомления
+                try {
+                    const response = await axios.get(`/api/notifications/${notification.id}`);
+                    if (response.data && response.data.data) {
+                        const fullNotification = response.data.data;
+                        notificationData = fullNotification.data;
+                        if (notificationData && notificationData.quiz_id) {
+                            quizId = notificationData.quiz_id;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error loading notification details:', error);
+                }
+            }
+
+            // Если это уведомление о квизе, переходим на страницу деталей
+            if (quizId) {
+                // Отмечаем как прочитанное перед переходом
+                if (!notification.read) {
+                    await markAsRead(notification.id);
+                }
+                // Переходим на страницу с деталями квиза
+                router.push(`/admin/notifications/quiz/${quizId}?notification_id=${notification.id}`);
+                isOpen.value = false; // Закрываем dropdown
+                return;
+            }
+
+            // Для остальных уведомлений просто отмечаем как прочитанное
+            await markAsRead(notification.id);
         };
 
         const markAsRead = async (id) => {
@@ -173,6 +221,7 @@ export default {
             notifications,
             unreadCount,
             toggleDropdown,
+            handleNotificationClick,
             markAsRead,
             formatDate,
         };

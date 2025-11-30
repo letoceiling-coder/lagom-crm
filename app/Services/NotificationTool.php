@@ -44,7 +44,7 @@ class NotificationTool
      */
     public function addNotification(User $user, string $title, string $message, ?string $type = 'info', ?array $data = null): Notification
     {
-        return Notification::create([
+        $notification = Notification::create([
             'user_id' => $user->id,
             'title' => $title,
             'message' => $message,
@@ -52,6 +52,23 @@ class NotificationTool
             'data' => $data,
             'read' => false,
         ]);
+
+        // Отправляем уведомление в Telegram, если включено
+        try {
+            $telegramSettings = \App\Models\TelegramSettings::getSettings();
+            if ($telegramSettings->is_enabled && $telegramSettings->send_notifications) {
+                $telegramService = new \App\Services\TelegramService();
+                $telegramService->sendNotification($title, $message, $type, $data);
+            }
+        } catch (\Exception $e) {
+            // Логируем ошибку, но не прерываем создание уведомления
+            \Illuminate\Support\Facades\Log::error('Failed to send notification to Telegram', [
+                'error' => $e->getMessage(),
+                'notification_id' => $notification->id,
+            ]);
+        }
+
+        return $notification;
     }
 
     /**
@@ -165,8 +182,9 @@ class NotificationTool
                 'title' => $notification->title,
                 'message' => $notification->message,
                 'type' => $notification->type,
-                'data' => $notification->data,
+                'data' => $notification->data, // Убеждаемся, что data включена
                 'read' => $notification->read,
+                'read_at' => $notification->read_at ? $notification->read_at->toDateTimeString() : null,
                 'created_at' => $notification->created_at->toDateTimeString(),
                 'created_at_human' => $notification->created_at->diffForHumans(),
             ];

@@ -250,6 +250,12 @@ const routes = [
                 component: () => import('./pages/admin/Settings.vue'),
             },
             {
+                path: 'settings/telegram',
+                name: 'admin.settings.telegram',
+                component: () => import('./pages/admin/settings/TelegramSettings.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
+            },
+            {
                 path: 'menus',
                 name: 'admin.menus',
                 component: () => import('./pages/admin/Menus.vue'),

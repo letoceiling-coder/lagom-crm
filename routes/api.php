@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\QuizController;
 use App\Http\Controllers\Api\QuizBlockSettingsController;
 use App\Http\Controllers\Api\QuizSubmissionController;
 use App\Http\Controllers\Api\DeployController;
+use App\Http\Controllers\Api\TelegramSettingsController;
 use App\Http\Controllers\Api\v1\FolderController;
 use App\Http\Controllers\Api\v1\MediaController;
 use Illuminate\Support\Facades\Route;
@@ -79,6 +80,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::apiResource('quizzes', QuizController::class);
             Route::get('quiz-block-settings', [QuizBlockSettingsController::class, 'show']);
             Route::put('quiz-block-settings', [QuizBlockSettingsController::class, 'update']);
+            Route::get('telegram-settings', [TelegramSettingsController::class, 'show']);
+            Route::put('telegram-settings', [TelegramSettingsController::class, 'update']);
+            Route::post('telegram-settings/test', [TelegramSettingsController::class, 'testConnection']);
+            Route::get('telegram-settings/webhook-info', [TelegramSettingsController::class, 'getWebhookInfo']);
         });
     });
 });

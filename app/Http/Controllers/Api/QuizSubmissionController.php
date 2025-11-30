@@ -243,12 +243,14 @@ class QuizSubmissionController extends Controller
         } catch (\Exception $e) {
             Log::error('Ошибка обработки прохождения квиза', [
                 'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Ошибка обработки результатов квиза',
+                'message' => 'Ошибка обработки результатов квиза: ' . $e->getMessage(),
             ], 500);
         }
     }
