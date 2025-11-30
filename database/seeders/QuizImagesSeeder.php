@@ -92,29 +92,46 @@ class QuizImagesSeeder extends Seeder
             $this->command->info("Создана директория: {$quizDir}");
         }
 
+        // Проверяем наличие директории public/img/delete в текущем проекте
+        $localImgDeletePath = public_path('img/delete');
+        if (!File::exists($localImgDeletePath)) {
+            File::makeDirectory($localImgDeletePath, 0755, true);
+            $this->command->info("Создана директория: {$localImgDeletePath}");
+        }
+
         $sourceBasePath = $this->getOldProjectPath();
         
-        if (!$sourceBasePath) {
-            $this->command->warn('⚠️  Путь к старому проекту не определен.');
-            $this->command->info('Для копирования исходных изображений укажите путь в .env файле:');
-            $this->command->info('OLD_PROJECT_PATH=/path/to/old/project');
-            $this->command->info('Если файлы не найдены, будут созданы placeholder изображения.');
-            $this->command->newLine();
-        } else {
-            $this->command->info("📍 Используется путь к старому проекту: {$sourceBasePath}");
+        $this->command->info('🔍 Поиск исходных изображений:');
+        $this->command->info('1. Сначала проверяется: public/img/delete/ (в текущем проекте)');
+        if ($sourceBasePath) {
+            $this->command->info("2. Если не найдено, проверяется: {$sourceBasePath}");
         }
+        $this->command->info('3. Если ничего не найдено, создаются placeholder изображения');
+        $this->command->newLine();
 
         foreach ($quizImages as $imageData) {
             $targetPath = public_path($imageData['target_path']);
             $relativePath = $imageData['target_path'];
             $sourcePath = null;
 
-            // Пробуем найти исходный файл
-            if ($sourceBasePath) {
-                $sourcePath = rtrim($sourceBasePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $imageData['source_file']);
+            // Сначала проверяем файл в текущем проекте (public/img/delete/)
+            $localSourcePath = public_path(str_replace('public/', '', $imageData['source_file']));
+            if (File::exists($localSourcePath)) {
+                $sourcePath = $localSourcePath;
+                $this->command->info("Найден файл в текущем проекте: {$localSourcePath}");
+            } else {
+                // Если не найден в текущем проекте, пробуем найти в старом проекте
+                if ($sourceBasePath) {
+                    $sourcePath = rtrim($sourceBasePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $imageData['source_file']);
+                    if (File::exists($sourcePath)) {
+                        $this->command->info("Найден файл в старом проекте: {$sourcePath}");
+                    } else {
+                        $sourcePath = null;
+                    }
+                }
             }
 
-            // Копируем файл из старого проекта, если путь найден и файл существует
+            // Копируем файл, если найден
             if ($sourcePath && File::exists($sourcePath)) {
                 // Если исходный файл PNG, конвертируем в JPG
                 if (strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION)) === 'png') {
@@ -126,12 +143,10 @@ class QuizImagesSeeder extends Seeder
                     $this->command->info("Скопировано: {$imageData['source_file']} -> {$imageData['target_path']}");
                 }
             } else {
-                // Если файл не найден или путь к старому проекту не определен, создаем placeholder
-                if ($sourcePath) {
-                    $this->command->warn("Файл не найден: {$sourcePath}");
-                } else {
-                    $this->command->warn("Путь к старому проекту не определен. Используйте переменную OLD_PROJECT_PATH в .env файле.");
-                }
+                // Если файл не найден ни в текущем проекте, ни в старом, создаем placeholder
+                $expectedLocalPath = public_path('img/delete/' . basename($imageData['source_file']));
+                $this->command->warn("Файл не найден: {$expectedLocalPath}");
+                $this->command->info("Ожидаемый путь: public/img/delete/" . basename($imageData['source_file']));
                 
                 // Проверяем, не создан ли уже файл (чтобы не перезаписывать существующие)
                 if (!File::exists($targetPath)) {
