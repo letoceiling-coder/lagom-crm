@@ -17,14 +17,15 @@
             </label>
             <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <input
-                    v-model="data.answer"
+                    v-model="answerValue"
                     type="text"
                     :placeholder="data.placeholder"
+                    @keyup.enter="handleNext"
                     class="flex-1 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-sm sm:text-base transition-colors disabled:opacity-50 focus:border-[#657C6C] focus:ring-2 focus:ring-[#657C6C]/20 focus:outline-none"
                 />
                 <button
                     @click="handleNext"
-                    :disabled="!data.answer || data.answer.trim() === ''"
+                    :disabled="!isAnswerValid"
                     class="px-6 sm:px-8 py-3 bg-[#657C6C] hover:bg-[#55695a] disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#657C6C] focus:ring-offset-2"
                 >
                     Далее
@@ -35,6 +36,8 @@
 </template>
 
 <script>
+import { ref, computed } from 'vue';
+
 export default {
     name: 'Inputs',
     props: {
@@ -48,17 +51,42 @@ export default {
         },
     },
     emits: ['next', 'answer'],
-    methods: {
-        handleNext() {
-            if (this.data.answer && this.data.answer.trim() !== '') {
-                this.$emit('answer', this.data.answer);
-                if (this.data.child) {
-                    this.$emit('next', this.data.child);
+    setup(props, { emit }) {
+        // Создаем локальную реактивную переменную для ответа
+        // Инициализируем из props.data.answer или пустой строкой
+        const answerValue = ref(props.data?.answer || '');
+
+        // Вычисляем, валиден ли ответ (проверяем, что значение не пустое)
+        const isAnswerValid = computed(() => {
+            const value = answerValue.value;
+            if (value === null || value === undefined) {
+                return false;
+            }
+            const strValue = value.toString().trim();
+            return strValue !== '';
+        });
+
+        const handleNext = () => {
+            const trimmedAnswer = answerValue.value?.toString().trim() || '';
+            if (trimmedAnswer) {
+                // Сохраняем ответ в data для синхронизации
+                if (props.data) {
+                    props.data.answer = trimmedAnswer;
+                }
+                emit('answer', trimmedAnswer);
+                if (props.data?.child) {
+                    emit('next', props.data.child);
                 } else {
-                    this.$emit('next');
+                    emit('next');
                 }
             }
-        },
+        };
+
+        return {
+            answerValue,
+            isAnswerValid,
+            handleNext,
+        };
     },
 };
 </script>
