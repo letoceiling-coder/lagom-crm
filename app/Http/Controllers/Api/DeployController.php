@@ -70,11 +70,14 @@ class DeployController extends Controller
                 throw new \Exception("Ошибка миграций: {$migrationsResult['error']}");
             }
 
-            // 4. Очистка кешей
+            // 4. Очистка временных файлов разработки
+            $this->cleanDevelopmentFiles();
+
+            // 5. Очистка кешей
             $cacheResult = $this->clearAllCaches();
             $result['data']['cache_cleared'] = $cacheResult['success'];
 
-            // 5. Оптимизация
+            // 6. Оптимизация
             $optimizeResult = $this->optimizeApplication();
             $result['data']['optimized'] = $optimizeResult['success'];
 
@@ -516,6 +519,67 @@ class DeployController extends Controller
             ]);
             // Не бросаем исключение, чтобы не прерывать деплой
         }
+    }
+
+    /**
+     * Очистить временные файлы разработки
+     * Удаляет файлы, которые не должны быть в продакшене
+     */
+    protected function cleanDevelopmentFiles(): void
+    {
+        try {
+            $filesToRemove = [
+                'public/hot',
+                'public/hot/',
+            ];
+
+            foreach ($filesToRemove as $file) {
+                $filePath = $this->basePath . '/' . trim($file, '/');
+                
+                // Проверяем, существует ли файл или директория
+                if (file_exists($filePath)) {
+                    if (is_file($filePath)) {
+                        unlink($filePath);
+                        Log::info("Удален файл разработки: {$file}");
+                    } elseif (is_dir($filePath)) {
+                        // Рекурсивно удаляем директорию
+                        $this->deleteDirectory($filePath);
+                        Log::info("Удалена директория разработки: {$file}");
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('Ошибка при очистке файлов разработки', [
+                'error' => $e->getMessage(),
+            ]);
+            // Не бросаем исключение, чтобы не прерывать деплой
+        }
+    }
+
+    /**
+     * Рекурсивно удалить директорию
+     */
+    protected function deleteDirectory(string $dir): bool
+    {
+        if (!file_exists($dir)) {
+            return true;
+        }
+
+        if (!is_dir($dir)) {
+            return unlink($dir);
+        }
+
+        foreach (scandir($dir) as $item) {
+            if ($item == '.' || $item == '..') {
+                continue;
+            }
+
+            if (!$this->deleteDirectory($dir . DIRECTORY_SEPARATOR . $item)) {
+                return false;
+            }
+        }
+
+        return rmdir($dir);
     }
 
     /**
