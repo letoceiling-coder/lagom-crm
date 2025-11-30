@@ -226,32 +226,53 @@ class DeployController extends Controller
 
             // Получаем текущий commit перед обновлением для сравнения
             $beforeCommit = $this->getCurrentCommitHash();
-            Log::info("Commit до обновления: {$beforeCommit}");
+            Log::info("📦 Commit до обновления: " . ($beforeCommit ?: 'не определен'));
+            
+            // Проверяем текущий статус Git
+            $statusOutput = Process::path($this->basePath)
+                ->run('git status --short 2>&1');
+            Log::info("📊 Текущий статус Git: " . trim($statusOutput->output() ?: 'чисто'));
 
             // Выполняем git pull с дополнительной настройкой безопасной директории
             $safeDirectoryPath = escapeshellarg($this->basePath);
             
             // 1. Сначала получаем последние изменения из репозитория
+            Log::info("📥 Выполняем git fetch origin main...");
             $fetchProcess = Process::path($this->basePath)
                 ->env([
                     'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
                 ])
-                ->run("git -c safe.directory={$safeDirectoryPath} fetch origin main");
+                ->run("git -c safe.directory={$safeDirectoryPath} fetch origin main 2>&1");
             
             if (!$fetchProcess->successful()) {
-                Log::warning('Не удалось выполнить git fetch', [
+                Log::warning('⚠️ Не удалось выполнить git fetch', [
+                    'output' => $fetchProcess->output(),
                     'error' => $fetchProcess->errorOutput(),
                 ]);
             } else {
-                Log::info('Git fetch выполнен успешно');
+                Log::info('✅ Git fetch выполнен успешно', [
+                    'output' => trim($fetchProcess->output() ?: 'нет вывода'),
+                ]);
             }
 
-            // 2. Сбрасываем локальную ветку на origin/main (принудительное обновление)
+            // 2. Проверяем, есть ли новые коммиты
+            $checkAheadProcess = Process::path($this->basePath)
+                ->run("git rev-list HEAD..origin/main --count 2>&1");
+            $commitsAhead = trim($checkAheadProcess->output() ?: '0');
+            Log::info("📊 Новых коммитов для загрузки: {$commitsAhead}");
+
+            // 3. Сбрасываем локальную ветку на origin/main (принудительное обновление)
+            Log::info("🔄 Выполняем git reset --hard origin/main...");
             $process = Process::path($this->basePath)
                 ->env([
                     'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
                 ])
-                ->run("git -c safe.directory={$safeDirectoryPath} reset --hard origin/main");
+                ->run("git -c safe.directory={$safeDirectoryPath} reset --hard origin/main 2>&1");
+            
+            Log::info("Git reset output: " . trim($process->output() ?: 'нет вывода'));
+            if ($process->errorOutput()) {
+                Log::warning("Git reset errors: " . trim($process->errorOutput()));
+            }
 
             if (!$process->successful()) {
                 Log::warning('Git reset --hard не удался, пробуем git pull', [
@@ -268,7 +289,7 @@ class DeployController extends Controller
 
             // 3. Получаем новый commit после обновления
             $afterCommit = $this->getCurrentCommitHash();
-            Log::info("Commit после обновления: {$afterCommit}");
+            Log::info("📦 Commit после обновления: " . ($afterCommit ?: 'не определен'));
             
             // 4. Проверяем, обновились ли файлы
             if ($beforeCommit !== $afterCommit) {
@@ -751,13 +772,23 @@ class DeployController extends Controller
     {
         try {
             $process = Process::path($this->basePath)
-                ->run('git rev-parse HEAD');
+                ->run('git rev-parse HEAD 2>&1');
 
             if ($process->successful()) {
-                return trim($process->output());
+                $hash = trim($process->output());
+                if (!empty($hash) && strlen($hash) === 40) {
+                    return $hash;
+                }
+            } else {
+                Log::warning('Не удалось получить commit hash', [
+                    'output' => $process->output(),
+                    'error' => $process->errorOutput(),
+                ]);
             }
         } catch (\Exception $e) {
-            // Ignore
+            Log::warning('Ошибка при получении commit hash', [
+                'error' => $e->getMessage(),
+            ]);
         }
         return null;
     }
