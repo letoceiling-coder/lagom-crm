@@ -164,6 +164,19 @@ class AdminMenu
                     ],
                 ],
             ],
+            [
+                'title' => 'Блоки',
+                'icon' => 'grid',
+                'roles' => ['admin', 'manager'],
+                'children' => [
+                    [
+                        'title' => 'Как это работает',
+                        'route' => 'admin.blocks.how-work',
+                        'icon' => 'settings',
+                        'roles' => ['admin', 'manager'],
+                    ],
+                ],
+            ],
         ]);
 
         if (!$user) {

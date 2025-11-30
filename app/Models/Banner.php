@@ -19,6 +19,8 @@ class Banner extends Model
         'button_text',
         'button_type',
         'button_value',
+        'height_desktop',
+        'height_mobile',
         'is_active',
         'order',
     ];
@@ -26,6 +28,8 @@ class Banner extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'order' => 'integer',
+        'height_desktop' => 'integer',
+        'height_mobile' => 'integer',
     ];
 
     /**

@@ -164,6 +164,57 @@
                     </div>
                 </div>
 
+                <!-- Height Settings -->
+                <div class="border-t border-border pt-6">
+                    <h3 class="text-lg font-semibold mb-4">Настройки высоты</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-sm font-medium mb-2 block">
+                                Высота для десктопа (px)
+                            </label>
+                            <input
+                                v-model.number="form.height_desktop"
+                                type="number"
+                                min="100"
+                                max="2000"
+                                step="10"
+                                class="w-full h-10 px-3 border border-border rounded bg-background text-foreground"
+                                placeholder="380"
+                            />
+                            <p class="text-xs text-muted-foreground mt-1">
+                                Высота баннера на больших экранах (от 1024px)
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="text-sm font-medium mb-2 block">
+                                Высота для мобильных (px)
+                            </label>
+                            <input
+                                v-model.number="form.height_mobile"
+                                type="number"
+                                min="100"
+                                max="2000"
+                                step="10"
+                                class="w-full h-10 px-3 border border-border rounded bg-background text-foreground"
+                                placeholder="300"
+                            />
+                            <p class="text-xs text-muted-foreground mt-1">
+                                Высота баннера на мобильных устройствах (до 640px)
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 p-4 bg-muted/50 rounded-lg">
+                        <p class="text-sm text-muted-foreground">
+                            <strong>Совет:</strong> Высота будет плавно изменяться между мобильной и десктопной версией 
+                            в зависимости от ширины экрана. Например, если установить 380px для десктопа и 300px для мобильных, 
+                            то на экране шириной 320px высота будет 300px, а на экране 1200px+ - 380px.
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Active Status -->
                 <div class="flex items-center gap-2">
                     <input
@@ -245,6 +296,8 @@ export default {
             button_text: '',
             button_type: 'url',
             button_value: '',
+            height_desktop: 380,
+            height_mobile: 300,
             is_active: true,
         });
 
@@ -271,6 +324,8 @@ export default {
                             button_text: homeBanner.button_text || '',
                             button_type: homeBanner.button_type || 'url',
                             button_value: homeBanner.button_value || '',
+                            height_desktop: homeBanner.height_desktop || 380,
+                            height_mobile: homeBanner.height_mobile || 300,
                             is_active: homeBanner.is_active !== undefined ? homeBanner.is_active : true,
                         };
                     }
@@ -337,6 +392,8 @@ export default {
                     button_text: form.value.button_text,
                     button_type: form.value.button_type,
                     button_value: form.value.button_value,
+                    height_desktop: form.value.height_desktop,
+                    height_mobile: form.value.height_mobile,
                     is_active: form.value.is_active,
                 });
 

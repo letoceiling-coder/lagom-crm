@@ -1,6 +1,10 @@
 <template>
     <div class="w-full px-3 sm:px-4 md:px-5 mt-3">
-        <section v-if="banner && banner.is_active" class="relative w-full max-w-[1200px] mx-auto rounded-lg min-h-[350px] sm:min-h-[450px] md:min-h-[550px] lg:min-h-[650px] overflow-hidden shadow-sm">
+        <section 
+            v-if="banner && banner.is_active" 
+            class="relative w-full max-w-[1200px] mx-auto rounded-lg overflow-hidden shadow-sm"
+            :style="bannerStyle"
+        >
             <!-- Background Image -->
             <div 
                 class="absolute inset-0 bg-cover bg-center bg-no-repeat bg-[#6C7B6D]" 
@@ -12,7 +16,10 @@
             ></div>
             
             <!-- Content Overlay -->
-            <div class="relative z-10 w-full px-4 sm:px-6 lg:px-8 h-full min-h-[350px] sm:min-h-[450px] md:min-h-[550px] lg:min-h-[650px] flex items-center">
+            <div 
+                class="relative z-10 w-full px-4 sm:px-6 lg:px-8 h-full flex items-center"
+                :style="bannerStyle"
+            >
                 <div class="w-full max-w-2xl">
                     <div v-if="banner.heading_1 || banner.heading_2 || banner.description" class="space-y-2 sm:space-y-3 mb-6 sm:mb-8">
                         <h1 v-if="banner.heading_1" class="text-white text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-semibold leading-tight drop-shadow-lg">
@@ -41,7 +48,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 
 export default {
     name: 'HeroBanner',
@@ -66,6 +73,8 @@ export default {
                             background_image: data.data.background_image 
                                 ? `/${data.data.background_image.replace(/^\//, '')}`
                                 : null,
+                            height_desktop: data.data.height_desktop || 380,
+                            height_mobile: data.data.height_mobile || 300,
                         };
                     }
                 }
@@ -84,6 +93,38 @@ export default {
             }
         };
 
+        // Вычисляем адаптивную высоту баннера
+        const bannerStyle = computed(() => {
+            if (!banner.value) return {};
+            
+            const heightDesktop = banner.value.height_desktop || 380;
+            const heightMobile = banner.value.height_mobile || 300;
+            
+            // Используем CSS clamp для плавного перехода между высотами
+            // Формула: clamp(min, preferred, max)
+            // Интерполяция: на 320px (мобильный) = heightMobile, на 1200px+ (десктоп) = heightDesktop
+            // 
+            // Вычисляем preferred значение используя viewport width
+            // На 320px: height = heightMobile
+            // На 1200px: height = heightDesktop
+            // Линейная интерполяция: height = heightMobile + (heightDesktop - heightMobile) * ((100vw - 320px) / (1200px - 320px))
+            
+            const heightDiff = heightDesktop - heightMobile;
+            const widthRange = 1200 - 320; // 880px
+            
+            // Используем упрощенную формулу для clamp
+            // preferred = heightMobile + heightDiff * ((100vw - 320px) / 880px)
+            // Но для лучшей совместимости используем более простой вариант
+            const preferredCalc = `(${heightMobile}px + ${heightDiff} * ((100vw - 320px) / ${widthRange}))`;
+            
+            return {
+                '--banner-height-mobile': `${heightMobile}px`,
+                '--banner-height-desktop': `${heightDesktop}px`,
+                minHeight: `${heightMobile}px`,
+                height: `clamp(${heightMobile}px, ${preferredCalc}, ${heightDesktop}px)`,
+            };
+        });
+
         onMounted(() => {
             fetchBanner();
         });
@@ -91,6 +132,7 @@ export default {
         return {
             banner,
             loading,
+            bannerStyle,
             handleButtonClick,
         };
     },

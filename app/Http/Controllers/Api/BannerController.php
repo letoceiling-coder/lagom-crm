@@ -36,6 +36,8 @@ class BannerController extends Controller
             'button_text' => 'nullable|string|max:255',
             'button_type' => 'required|in:url,method',
             'button_value' => 'nullable|string|max:500',
+            'height_desktop' => 'nullable|integer|min:100|max:2000',
+            'height_mobile' => 'nullable|integer|min:100|max:2000',
             'is_active' => 'nullable|boolean',
             'order' => 'nullable|integer|min:0',
         ]);
@@ -63,6 +65,8 @@ class BannerController extends Controller
             'button_text',
             'button_type',
             'button_value',
+            'height_desktop',
+            'height_mobile',
             'is_active',
             'order',
         ]));
@@ -120,6 +124,8 @@ class BannerController extends Controller
             'button_text' => 'nullable|string|max:255',
             'button_type' => 'required|in:url,method',
             'button_value' => 'nullable|string|max:500',
+            'height_desktop' => 'nullable|integer|min:100|max:2000',
+            'height_mobile' => 'nullable|integer|min:100|max:2000',
             'is_active' => 'nullable|boolean',
             'order' => 'nullable|integer|min:0',
         ]);
@@ -141,6 +147,8 @@ class BannerController extends Controller
             'button_text',
             'button_type',
             'button_value',
+            'height_desktop',
+            'height_mobile',
             'is_active',
             'order',
         ]));

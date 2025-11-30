@@ -368,6 +368,13 @@ const routes = [
                 component: () => import('./pages/admin/quizzes/Settings.vue'),
                 meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
             },
+            // Blocks routes
+            {
+                path: 'blocks/how-work',
+                name: 'admin.blocks.how-work',
+                component: () => import('./pages/admin/blocks/HowWorkSettings.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
+            },
         ],
     },
 ];
