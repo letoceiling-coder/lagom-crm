@@ -270,8 +270,28 @@ class DeployController extends Controller
             $afterCommit = $this->getCurrentCommitHash();
             Log::info("Commit после обновления: {$afterCommit}");
             
+            // 4. Проверяем, обновились ли файлы
             if ($beforeCommit !== $afterCommit) {
-                Log::info("✅ Код обновлен: {$beforeCommit} -> {$afterCommit}");
+                Log::info("✅ Код успешно обновлен: {$beforeCommit} -> {$afterCommit}");
+                
+                // Показываем измененные файлы
+                try {
+                    $diffProcess = Process::path($this->basePath)
+                        ->run("git diff --name-only {$beforeCommit} {$afterCommit} 2>&1");
+                    
+                    $changedFiles = array_filter(explode("\n", trim($diffProcess->output())));
+                    if (!empty($changedFiles)) {
+                        $fileList = implode(', ', array_slice($changedFiles, 0, 10));
+                        if (count($changedFiles) > 10) {
+                            $fileList .= ' ... (всего ' . count($changedFiles) . ' файлов)';
+                        }
+                        Log::info("📝 Обновленные файлы: {$fileList}");
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Не удалось получить список измененных файлов', [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             } else {
                 Log::info("ℹ️ Код уже актуален, изменений нет");
             }
