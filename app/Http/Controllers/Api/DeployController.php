@@ -227,7 +227,7 @@ class DeployController extends Controller
             // Получаем текущий commit перед обновлением для сравнения
             $beforeCommit = $this->getCurrentCommitHash();
             Log::info("📦 Commit до обновления: " . ($beforeCommit ?: 'не определен'));
-            
+
             // Проверяем текущий статус Git
             $statusOutput = Process::path($this->basePath)
                 ->run('git status --short 2>&1');
@@ -235,7 +235,7 @@ class DeployController extends Controller
 
             // Выполняем git pull с дополнительной настройкой безопасной директории
             $safeDirectoryPath = escapeshellarg($this->basePath);
-            
+
             // 1. Сначала получаем последние изменения из репозитория
             Log::info("📥 Выполняем git fetch origin main...");
             $fetchProcess = Process::path($this->basePath)
@@ -243,7 +243,7 @@ class DeployController extends Controller
                     'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
                 ])
                 ->run("git -c safe.directory={$safeDirectoryPath} fetch origin main 2>&1");
-            
+
             if (!$fetchProcess->successful()) {
                 Log::warning('⚠️ Не удалось выполнить git fetch', [
                     'output' => $fetchProcess->output(),
@@ -268,7 +268,7 @@ class DeployController extends Controller
                     'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
                 ])
                 ->run("git -c safe.directory={$safeDirectoryPath} reset --hard origin/main 2>&1");
-            
+
             Log::info("Git reset output: " . trim($process->output() ?: 'нет вывода'));
             if ($process->errorOutput()) {
                 Log::warning("Git reset errors: " . trim($process->errorOutput()));
@@ -278,7 +278,7 @@ class DeployController extends Controller
                 Log::warning('Git reset --hard не удался, пробуем git pull', [
                     'error' => $process->errorOutput(),
                 ]);
-                
+
                 // Если reset не удался, пробуем обычный pull
                 $process = Process::path($this->basePath)
                     ->env([
@@ -290,16 +290,16 @@ class DeployController extends Controller
             // 3. Получаем новый commit после обновления
             $afterCommit = $this->getCurrentCommitHash();
             Log::info("📦 Commit после обновления: " . ($afterCommit ?: 'не определен'));
-            
+
             // 4. Проверяем, обновились ли файлы
             if ($beforeCommit && $afterCommit && $beforeCommit !== $afterCommit) {
                 Log::info("✅ Код успешно обновлен: {$beforeCommit} -> {$afterCommit}");
-                
+
                 // Показываем измененные файлы
                 try {
                     $diffProcess = Process::path($this->basePath)
                         ->run("git diff --name-only {$beforeCommit} {$afterCommit} 2>&1");
-                    
+
                     $changedFiles = array_filter(explode("\n", trim($diffProcess->output())));
                     if (!empty($changedFiles)) {
                         $fileList = implode(', ', array_slice($changedFiles, 0, 10));
@@ -321,18 +321,18 @@ class DeployController extends Controller
                     'after' => $afterCommit,
                     'message' => 'Возможно, Git репозиторий не инициализирован или есть проблемы с доступом',
                 ]);
-                
+
                 // Дополнительная проверка: проверяем, что это Git репозиторий
                 $gitCheckProcess = Process::path($this->basePath)
                     ->run("git rev-parse --is-inside-work-tree 2>&1");
-                
+
                 if (!$gitCheckProcess->successful() || trim($gitCheckProcess->output()) !== 'true') {
                     Log::error("❌ Это не Git репозиторий! Путь: {$this->basePath}");
                 } else {
                     Log::info("✅ Это Git репозиторий, но commit hash не определен");
                 }
             }
-            
+
             // 5. Дополнительная проверка: список последних коммитов
             try {
                 $logProcess = Process::path($this->basePath)
@@ -822,4 +822,5 @@ class DeployController extends Controller
     }
 }
 
+//exit()
 //exit()
