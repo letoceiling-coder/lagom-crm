@@ -123,4 +123,17 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Deploy Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for deployment system
+    |
+    */
+
+    'deploy_token' => env('DEPLOY_TOKEN'),
+    'server_url' => env('SERVER_URL'),
+    'php_path' => env('PHP_PATH'),
+
 ];

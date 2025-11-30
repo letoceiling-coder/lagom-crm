@@ -16,12 +16,15 @@ class VerifyDeployToken
     public function handle(Request $request, Closure $next): Response
     {
         $token = $request->header('X-Deploy-Token') ?? $request->input('token');
-        $expectedToken = env('DEPLOY_TOKEN');
+        
+        // Используем config() для работы после кеширования конфигурации
+        // Если конфиг закеширован, используем config(), иначе env()
+        $expectedToken = config('app.deploy_token') ?? env('DEPLOY_TOKEN');
 
         if (!$expectedToken) {
             return response()->json([
                 'success' => false,
-                'message' => 'DEPLOY_TOKEN не настроен на сервере',
+                'message' => 'DEPLOY_TOKEN не настроен на сервере. Проверьте .env и выполните: php artisan config:clear',
             ], 500);
         }
 
