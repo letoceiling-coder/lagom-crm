@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             MenuSeeder::class,
             QuizImagesSeeder::class,
             QuizSeeder::class,
+            HowWorkBlockSettingsSeeder::class,
         ]);
     }
 }
