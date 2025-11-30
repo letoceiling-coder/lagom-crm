@@ -542,34 +542,36 @@ class DeployController extends Controller
             foreach ($filesToRemove as $file) {
                 $filePath = $this->basePath . '/' . trim($file, '/');
                 
-                // Способ 1: Через PHP функции
+                // Удаляем через shell команды (наиболее надежно)
+                $escapedPath = escapeshellarg($filePath);
+                $publicPath = escapeshellarg($this->basePath . '/public');
+                
+                // Множественные способы удаления для максимальной надежности
+                Process::path($this->basePath)
+                    ->run("rm -f {$escapedPath} 2>/dev/null || true");
+                
+                Process::path($this->basePath)
+                    ->run("rm -rf {$escapedPath} 2>/dev/null || true");
+                
+                Process::path($this->basePath)
+                    ->run("find {$publicPath} -maxdepth 1 -name 'hot' -delete 2>/dev/null || true");
+                
+                // Через PHP функции (как дополнительная проверка)
                 if (file_exists($filePath)) {
                     if (is_file($filePath)) {
                         @unlink($filePath);
-                        Log::info("Удален файл разработки: {$file}");
                     } elseif (is_dir($filePath)) {
-                        // Рекурсивно удаляем директорию
                         $this->deleteDirectory($filePath);
-                        Log::info("Удалена директория разработки: {$file}");
                     }
-                }
-                
-                // Способ 2: Через shell команды (более надежно)
-                // Удаляем файл и директорию независимо от того, существует ли она
-                $escapedPath = escapeshellarg($filePath);
-                
-                // Удаляем файл
-                $rmFileProcess = Process::path($this->basePath)
-                    ->run("rm -f {$escapedPath}");
-                
-                // Удаляем директорию рекурсивно (если это директория)
-                $rmDirProcess = Process::path($this->basePath)
-                    ->run("rm -rf {$escapedPath}");
-                
-                if ($rmFileProcess->successful() || $rmDirProcess->successful()) {
-                    Log::info("Удален файл разработки через shell: {$file}");
+                    Log::info("Удален файл разработки: {$file}");
                 }
             }
+            
+            // Финальная проверка через 2 секунды (на случай асинхронного создания)
+            Process::path($this->basePath)
+                ->timeout(5)
+                ->run("sleep 2 && find " . escapeshellarg($this->basePath . '/public') . " -maxdepth 1 -name 'hot' -delete 2>/dev/null || true");
+                
         } catch (\Exception $e) {
             Log::warning('Ошибка при очистке файлов разработки', [
                 'error' => $e->getMessage(),
