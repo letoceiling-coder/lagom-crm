@@ -224,8 +224,29 @@ class DeployController extends Controller
             // Сбрасываем неотслеживаемые файлы, которые могут конфликтовать
             $this->cleanUntrackedFiles();
 
+            // Получаем текущий commit перед обновлением для сравнения
+            $beforeCommit = $this->getCurrentCommitHash();
+            Log::info("Commit до обновления: {$beforeCommit}");
+
             // Выполняем git pull с дополнительной настройкой безопасной директории
             $safeDirectoryPath = escapeshellarg($this->basePath);
+            
+            // 1. Сначала получаем последние изменения из репозитория
+            $fetchProcess = Process::path($this->basePath)
+                ->env([
+                    'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
+                ])
+                ->run("git -c safe.directory={$safeDirectoryPath} fetch origin main");
+            
+            if (!$fetchProcess->successful()) {
+                Log::warning('Не удалось выполнить git fetch', [
+                    'error' => $fetchProcess->errorOutput(),
+                ]);
+            } else {
+                Log::info('Git fetch выполнен успешно');
+            }
+
+            // 2. Сбрасываем локальную ветку на origin/main (принудительное обновление)
             $process = Process::path($this->basePath)
                 ->env([
                     'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
@@ -233,12 +254,26 @@ class DeployController extends Controller
                 ->run("git -c safe.directory={$safeDirectoryPath} reset --hard origin/main");
 
             if (!$process->successful()) {
+                Log::warning('Git reset --hard не удался, пробуем git pull', [
+                    'error' => $process->errorOutput(),
+                ]);
+                
                 // Если reset не удался, пробуем обычный pull
                 $process = Process::path($this->basePath)
                     ->env([
                         'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
                     ])
-                    ->run("git -c safe.directory={$safeDirectoryPath} pull origin main --no-rebase");
+                    ->run("git -c safe.directory={$safeDirectoryPath} pull origin main --no-rebase --force");
+            }
+
+            // 3. Получаем новый commit после обновления
+            $afterCommit = $this->getCurrentCommitHash();
+            Log::info("Commit после обновления: {$afterCommit}");
+            
+            if ($beforeCommit !== $afterCommit) {
+                Log::info("✅ Код обновлен: {$beforeCommit} -> {$afterCommit}");
+            } else {
+                Log::info("ℹ️ Код уже актуален, изменений нет");
             }
 
             if ($process->successful()) {
