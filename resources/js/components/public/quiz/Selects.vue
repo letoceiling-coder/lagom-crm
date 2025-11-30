@@ -40,7 +40,14 @@ export default {
     emits: ['next', 'answer'],
     methods: {
         handleSelect(select) {
-            this.$emit('answer', select.id || select.name);
+            // Отправляем полную информацию о выбранном варианте
+            const answerData = {
+                id: select.id || select.name,
+                name: select.name || '',
+                title: select.title || select.name || '',
+                text: select.name || select.title || '',
+            };
+            this.$emit('answer', answerData);
             // Переходим к следующему вопросу (по умолчанию к следующему по порядку)
             setTimeout(() => {
                 this.$emit('next');

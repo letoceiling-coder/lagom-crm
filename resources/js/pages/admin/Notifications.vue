@@ -252,30 +252,28 @@
                                     </div>
                                 </div>
 
-                                <div v-if="selectedNotification.data.answers && selectedNotification.data.answers.length > 0" class="mt-4">
-                                    <h4 class="text-sm font-semibold text-foreground mb-3">Ответы пользователя:</h4>
-                                    <div class="space-y-3">
-                                        <div
-                                            v-for="(answerItem, index) in selectedNotification.data.answers"
-                                            :key="index"
-                                            class="bg-muted/30 rounded-lg p-4 border-l-4 border-accent"
-                                        >
-                                            <div class="text-sm font-medium text-foreground mb-1">
-                                                {{ answerItem.question_text || `Вопрос ${index + 1}` }}
-                                            </div>
-                                            <div class="text-sm text-muted-foreground">
-                                                <strong>Ответ:</strong>
-                                                <span class="ml-2">
-                                                    {{ formatAnswer(answerItem.answer) }}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
                                 <div v-if="selectedNotification.data.completed_at" class="mt-4">
                                     <span class="text-sm text-muted-foreground">Завершено:</span>
                                     <span class="ml-2 text-foreground">{{ formatDate(selectedNotification.data.completed_at) }}</span>
+                                </div>
+
+                                <div v-if="selectedNotification.data.answers && selectedNotification.data.answers.length > 0" class="mt-4">
+                                    <p class="text-sm text-muted-foreground mb-3">
+                                        Ответов на вопросы: {{ selectedNotification.data.answers.length }}
+                                    </p>
+                                </div>
+
+                                <div class="mt-6">
+                                    <router-link
+                                        :to="`/admin/notifications/quiz/${selectedNotification.data.quiz_id}?notification_id=${selectedNotification.id}`"
+                                        class="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                                    >
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                        </svg>
+                                        Просмотреть подробности прохождения квиза
+                                    </router-link>
                                 </div>
                             </div>
                         </div>
@@ -581,7 +579,17 @@ export default {
             if (answer === null || answer === undefined) {
                 return 'Нет ответа'
             }
+
+            // Если ответ - объект с полной информацией
             if (typeof answer === 'object') {
+                // Новый формат с answer.value и answer.text
+                if (answer.text) {
+                    return answer.text
+                }
+                if (answer.value) {
+                    return answer.value
+                }
+                // Старый формат - ищем текст в объекте
                 if (answer.name) return answer.name
                 if (answer.title) return answer.title
                 if (Array.isArray(answer)) {
@@ -589,6 +597,7 @@ export default {
                 }
                 return JSON.stringify(answer, null, 2)
             }
+            
             return String(answer)
         }
 

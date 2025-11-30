@@ -266,6 +266,11 @@ const routes = [
                 name: 'admin.notifications',
                 component: () => import('./pages/admin/Notifications.vue'),
             },
+            {
+                path: 'notifications/quiz/:quizId',
+                name: 'admin.notifications.quiz',
+                component: () => import('./pages/admin/notifications/QuizDetails.vue'),
+            },
             // Decision Block routes
             {
                 path: 'decisions/chapters',

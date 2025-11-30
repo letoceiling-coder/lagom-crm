@@ -55,7 +55,15 @@ export default {
     emits: ['next', 'answer'],
     methods: {
         handleSelect(select) {
-            this.$emit('answer', select.id);
+            // Отправляем полную информацию о выбранном варианте
+            const answerData = {
+                id: select.id || select.name,
+                name: select.name || '',
+                title: select.title || select.name || '',
+                text: select.title || select.name || '',
+                src: select.src || select.webp || '',
+            };
+            this.$emit('answer', answerData);
             if (select.child) {
                 setTimeout(() => {
                     this.$emit('next', select.child);

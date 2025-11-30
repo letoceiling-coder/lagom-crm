@@ -36,12 +36,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/menu', [AdminMenuController::class, 'index']);
     
     // Уведомления
+    // Специфичные маршруты должны быть выше маршрутов с параметрами
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::get('/notifications/all', [NotificationController::class, 'all']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::get('/notifications/{id}', [NotificationController::class, 'show']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
-    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     
     // Media API (v1)
     Route::prefix('v1')->group(function () {

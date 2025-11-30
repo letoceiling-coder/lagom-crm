@@ -68,19 +68,60 @@ class QuizSubmissionController extends Controller
             foreach ($request->answers as $index => $answer) {
                 if (isset($questions[$index])) {
                     $question = $questions[$index];
+                    
+                    // Определяем текст ответа в зависимости от типа вопроса
+                    $answerText = $answer;
+                    $answerValue = $answer;
+                    
+                    if (is_array($answer)) {
+                        // Если ответ - массив (объект с полной информацией)
+                        $answerText = $answer['text'] ?? $answer['title'] ?? $answer['name'] ?? (string)($answer['id'] ?? '');
+                        $answerValue = $answer['id'] ?? $answerText;
+                    } elseif (is_object($answer)) {
+                        // Если ответ - объект
+                        $answerText = $answer->text ?? $answer->title ?? $answer->name ?? (string)($answer->id ?? '');
+                        $answerValue = $answer->id ?? $answerText;
+                    }
+                    
+                    // Для вопросов с вариантами (selects, images-collect) получаем полный путь
+                    if (in_array($question->question_type, ['selects', 'images-collect']) && isset($question->question_data['selects'])) {
+                        $selectedOption = null;
+                        // Ищем выбранный вариант в данных вопроса
+                        foreach ($question->question_data['selects'] as $option) {
+                            $optionId = $option['id'] ?? null;
+                            if ($optionId && ($optionId == $answerValue || (is_array($answer) && ($optionId == ($answer['id'] ?? null)))) {
+                                $selectedOption = $option;
+                                break;
+                            }
+                        }
+                        
+                        if ($selectedOption) {
+                            $answerText = $selectedOption['title'] ?? $selectedOption['name'] ?? $answerText;
+                        }
+                    }
+                    
                     $detailedAnswers[] = [
                         'question_id' => $question->id,
                         'question_text' => $question->question_text,
                         'question_type' => $question->question_type,
-                        'answer' => $answer,
+                        'answer' => [
+                            'value' => $answerValue,
+                            'text' => $answerText,
+                            'full_data' => is_array($answer) ? $answer : (is_object($answer) ? (array)$answer : ['value' => $answer]),
+                        ],
                     ];
                 } else {
                     // Если вопрос не найден, все равно сохраняем ответ
+                    $answerText = is_array($answer) ? ($answer['text'] ?? $answer['title'] ?? $answer['name'] ?? '') : (string)$answer;
                     $detailedAnswers[] = [
                         'question_id' => null,
                         'question_text' => "Вопрос " . ($index + 1),
                         'question_type' => 'unknown',
-                        'answer' => $answer,
+                        'answer' => [
+                            'value' => is_array($answer) ? ($answer['id'] ?? $answerText) : $answer,
+                            'text' => $answerText,
+                            'full_data' => is_array($answer) ? $answer : ['value' => $answer],
+                        ],
                     ];
                 }
             }

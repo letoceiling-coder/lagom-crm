@@ -108,13 +108,22 @@ export default {
 
         const fetchUnreadCount = async () => {
             try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    return; // Если нет токена, не делаем запрос
+                }
+
                 const response = await axios.get('/api/notifications/unread-count');
+                
                 if (response.data && response.data.count !== undefined) {
                     // Обновляем счетчик в store через обновление уведомлений
                     await store.dispatch('fetchNotifications');
                 }
             } catch (error) {
-                console.error('Error fetching unread count:', error);
+                // Тихо игнорируем ошибки 404/401 (маршрут может быть недоступен или пользователь не авторизован)
+                if (error.response?.status !== 404 && error.response?.status !== 401) {
+                    console.error('Error fetching unread count:', error);
+                }
             }
         };
 

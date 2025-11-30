@@ -27,15 +27,29 @@
                 name="quiz-fade"
                 mode="out-in"
             >
-                <component
-                    :is="currentQuestion.question_type"
-                    :key="currentQuestion.id"
-                    :data="formatQuestionData(currentQuestion)"
-                    :number-question="currentQuestion.id"
-                    @next="goToNext"
-                    @answer="handleAnswer"
-                    @submit="handleSubmit"
-                />
+                <div>
+                    <!-- Кнопка "Назад" -->
+                    <div v-if="questionHistory.length > 0 || currentQuestionNumber > 1" class="mb-4">
+                        <button
+                            @click="goToPrevious"
+                            class="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base"
+                        >
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                            </svg>
+                            Назад
+                        </button>
+                    </div>
+                    <component
+                        :is="currentQuestion.question_type"
+                        :key="currentQuestion.id"
+                        :data="formatQuestionData(currentQuestion)"
+                        :number-question="currentQuestion.id"
+                        @next="goToNext"
+                        @answer="handleAnswer"
+                        @submit="handleSubmit"
+                    />
+                </div>
             </Transition>
         </div>
     </div>
@@ -74,6 +88,7 @@ export default {
         const quizData = ref(null);
         const questions = ref([]);
         const currentQuestionNumber = ref(1);
+        const questionHistory = ref([]); // История переходов для кнопки "Назад"
         const isActive = ref(false);
         const answers = ref({}); // Хранилище всех ответов
         const isCompleted = ref(false);
@@ -130,6 +145,7 @@ export default {
                     // Начинаем с первого вопроса (используем displayId)
                     if (questions.value.length > 0) {
                         currentQuestionNumber.value = questions.value[0].displayId;
+                        questionHistory.value = []; // Инициализируем историю пустым массивом
                     }
                 }
             } catch (err) {
@@ -188,6 +204,12 @@ export default {
         });
 
         const goToNext = (nextId) => {
+            // Добавляем текущий вопрос в историю перед переходом
+            const currentId = currentQuestionNumber.value;
+            if (currentId && !questionHistory.value.includes(currentId)) {
+                questionHistory.value.push(currentId);
+            }
+            
             if (nextId) {
                 // Если указан nextId (child из question_data), ищем вопрос с таким order
                 // nextId обычно указывает на порядковый номер следующего вопроса
@@ -207,6 +229,23 @@ export default {
                 const currentIndex = questions.value.findIndex(q => q.displayId === currentQuestionNumber.value);
                 if (currentIndex < questions.value.length - 1) {
                     currentQuestionNumber.value = questions.value[currentIndex + 1].displayId;
+                }
+            }
+        };
+
+        const goToPrevious = () => {
+            const currentIndex = questions.value.findIndex(q => q.displayId === currentQuestionNumber.value);
+            
+            if (currentIndex > 0) {
+                // Переходим к предыдущему вопросу по порядку
+                const previousQuestion = questions.value[currentIndex - 1];
+                if (previousQuestion) {
+                    // Удаляем текущий вопрос из истории, если он там есть
+                    const historyIndex = questionHistory.value.lastIndexOf(currentQuestionNumber.value);
+                    if (historyIndex !== -1) {
+                        questionHistory.value = questionHistory.value.slice(0, historyIndex);
+                    }
+                    currentQuestionNumber.value = previousQuestion.displayId;
                 }
             }
         };
@@ -291,9 +330,11 @@ export default {
             isSubmitting,
             formatQuestionData,
             goToNext,
+            goToPrevious,
             handleAnswer,
             handleSubmit,
             submitQuiz,
+            questionHistory,
         };
     },
 };
