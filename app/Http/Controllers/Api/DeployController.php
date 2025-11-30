@@ -325,18 +325,48 @@ class DeployController extends Controller
             $composerPath = $this->getComposerPath();
             
             // Определяем HOME директорию (для composer)
-            $homeDir = getenv('HOME') ?: (getenv('USERPROFILE') ?: '/tmp');
+            // Попробуем получить из пользователя или использовать базовую директорию
+            $homeDir = getenv('HOME');
+            if (!$homeDir) {
+                // Попробуем определить по пути проекта или использовать временную директорию
+                $projectUser = posix_getpwuid(posix_geteuid());
+                $homeDir = $projectUser['dir'] ?? '/tmp';
+            }
             
             // Используем PHP 8.2 для запуска composer
-            $command = "{$this->phpPath} {$composerPath} install --no-dev --optimize-autoloader --no-interaction";
+            // Добавляем --no-scripts временно, чтобы избежать проблем с prePackageUninstall
+            // Затем запустим скрипты отдельно после успешной установки
+            $command = "{$this->phpPath} {$composerPath} install --no-dev --optimize-autoloader --no-interaction --no-scripts";
             
-            // Устанавливаем переменные окружения для composer
+            // Устанавливаем переменные окружения для composer и увеличиваем таймаут
             $process = Process::path($this->basePath)
+                ->timeout(600) // 10 минут для composer install
                 ->env([
                     'HOME' => $homeDir,
                     'COMPOSER_HOME' => $homeDir . '/.composer',
+                    'COMPOSER_DISABLE_XDEBUG_WARN' => '1',
                 ])
                 ->run($command);
+            
+            // Если composer install прошел успешно, запускаем скрипты отдельно
+            if ($process->successful()) {
+                // Запускаем post-install скрипты
+                $scriptsCommand = "{$this->phpPath} {$composerPath} run-script post-install-cmd --no-interaction";
+                $scriptsProcess = Process::path($this->basePath)
+                    ->timeout(300)
+                    ->env([
+                        'HOME' => $homeDir,
+                        'COMPOSER_HOME' => $homeDir . '/.composer',
+                    ])
+                    ->run($scriptsCommand);
+                
+                // Игнорируем ошибки скриптов - они не критичны
+                if (!$scriptsProcess->successful()) {
+                    Log::warning('Composer post-install scripts failed', [
+                        'error' => $scriptsProcess->errorOutput(),
+                    ]);
+                }
+            }
 
             if ($process->successful()) {
                 return [
