@@ -42,7 +42,18 @@ return Application::configure(basePath: dirname(__DIR__))
                             }
                         }
                         
-                        $telegramService->sendError($e, $context);
+                        // Отправляем ошибку всем администраторам с telegram_chat_id
+                        $adminUsers = \App\Models\User::whereNotNull('telegram_chat_id')
+                            ->whereHas('roles', function ($query) {
+                                $query->whereIn('slug', ['admin', 'manager']);
+                            })
+                            ->get();
+
+                        if ($adminUsers->isNotEmpty()) {
+                            foreach ($adminUsers as $adminUser) {
+                                $telegramService->sendError($e, $context, (string)$adminUser->telegram_chat_id);
+                            }
+                        }
                     }
                 }
             } catch (\Throwable $telegramException) {

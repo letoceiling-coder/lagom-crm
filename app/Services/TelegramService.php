@@ -132,9 +132,10 @@ class TelegramService
      * @param string $message
      * @param string $type
      * @param array|null $data
+     * @param string|null $chatId Переопределить chat_id
      * @return bool
      */
-    public function sendNotification(string $title, string $message, string $type = 'info', ?array $data = null): bool
+    public function sendNotification(string $title, string $message, string $type = 'info', ?array $data = null, ?string $chatId = null): bool
     {
         $emoji = match($type) {
             'success' => '✅',
@@ -158,7 +159,7 @@ class TelegramService
             }
         }
 
-        return $this->sendMessage($text, null, ['parse_mode' => 'HTML']);
+        return $this->sendMessage($text, $chatId, ['parse_mode' => 'HTML']);
     }
 
     /**
@@ -166,11 +167,14 @@ class TelegramService
      * 
      * @param \Exception $exception
      * @param array|null $context
+     * @param string|null $chatId Переопределить chat_id
      * @return bool
      */
-    public function sendError(\Exception $exception, ?array $context = null): bool
+    public function sendError(\Exception $exception, ?array $context = null, ?string $chatId = null): bool
     {
-        if (!$this->isEnabled()) {
+        $useChatId = $chatId ?? $this->chatId;
+        
+        if (!$this->token || !$useChatId) {
             return false;
         }
 
@@ -192,7 +196,7 @@ class TelegramService
 
         $message .= "\n⏰ <b>Время:</b> " . now()->format('d.m.Y H:i:s');
 
-        return $this->sendMessage($message, null, ['parse_mode' => 'HTML']);
+        return $this->sendMessage($message, $useChatId, ['parse_mode' => 'HTML']);
     }
 
     /**
@@ -434,16 +438,19 @@ class TelegramService
      * 
      * @param string $url
      * @param array $options
+     * @param string|null $token Переопределить токен
      * @return bool
      */
-    public function setWebhook(string $url, array $options = []): bool
+    public function setWebhook(string $url, array $options = [], ?string $token = null): bool
     {
-        if (!$this->token) {
+        $useToken = $token ?? $this->token;
+        
+        if (!$useToken) {
             return false;
         }
 
         try {
-            $apiUrl = "https://api.telegram.org/bot{$this->token}/setWebhook";
+            $apiUrl = "https://api.telegram.org/bot{$useToken}/setWebhook";
             
             $payload = array_merge([
                 'url' => $url,
@@ -451,7 +458,18 @@ class TelegramService
             
             $response = Http::timeout(10)->post($apiUrl, $payload);
 
-            return $response->successful();
+            if ($response->successful()) {
+                $result = $response->json();
+                if (isset($result['ok']) && $result['ok']) {
+                    return true;
+                }
+            }
+            
+            Log::warning('Webhook registration failed', [
+                'response' => $response->body(),
+            ]);
+            
+            return false;
         } catch (\Exception $e) {
             Log::error('Failed to set webhook', ['error' => $e->getMessage()]);
             return false;
@@ -483,16 +501,19 @@ class TelegramService
     /**
      * Получить информацию о webhook
      * 
+     * @param string|null $token Переопределить токен
      * @return array|null
      */
-    public function getWebhookInfo(): ?array
+    public function getWebhookInfo(?string $token = null): ?array
     {
-        if (!$this->token) {
+        $useToken = $token ?? $this->token;
+        
+        if (!$useToken) {
             return null;
         }
 
         try {
-            $url = "https://api.telegram.org/bot{$this->token}/getWebhookInfo";
+            $url = "https://api.telegram.org/bot{$useToken}/getWebhookInfo";
             $response = Http::timeout(10)->get($url);
 
             if ($response->successful()) {

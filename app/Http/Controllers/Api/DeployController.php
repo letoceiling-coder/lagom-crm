@@ -490,25 +490,8 @@ class DeployController extends Controller
                 ])
                 ->run($command);
 
-            // Если composer install прошел успешно, запускаем скрипты отдельно
-            if ($process->successful()) {
-                // Запускаем post-install скрипты
-                $scriptsCommand = "{$this->phpPath} {$composerPath} run-script post-install-cmd --no-interaction";
-                $scriptsProcess = Process::path($this->basePath)
-                    ->timeout(300)
-                    ->env([
-                        'HOME' => $homeDir,
-                        'COMPOSER_HOME' => $homeDir . '/.composer',
-                    ])
-                    ->run($scriptsCommand);
-
-                // Игнорируем ошибки скриптов - они не критичны
-                if (!$scriptsProcess->successful()) {
-                    Log::warning('Composer post-install scripts failed', [
-                        'error' => $scriptsProcess->errorOutput(),
-                    ]);
-                }
-            }
+            // Laravel автоматически запускает нужные скрипты через post-autoload-dump
+            // при выполнении composer install, поэтому дополнительный вызов не нужен
 
             if ($process->successful()) {
                 return [

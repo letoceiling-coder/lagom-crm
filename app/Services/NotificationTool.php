@@ -53,12 +53,29 @@ class NotificationTool
             'read' => false,
         ]);
 
-        // Отправляем уведомление в Telegram, если включено
+        // Отправляем уведомление в Telegram всем администраторам, если включено
         try {
             $telegramSettings = \App\Models\TelegramSettings::getSettings();
             if ($telegramSettings->is_enabled && $telegramSettings->send_notifications) {
-                $telegramService = new \App\Services\TelegramService();
-                $telegramService->sendNotification($title, $message, $type, $data);
+                // Получаем всех администраторов с telegram_chat_id
+                $adminUsers = \App\Models\User::whereNotNull('telegram_chat_id')
+                    ->whereHas('roles', function ($query) {
+                        $query->whereIn('slug', ['admin', 'manager']);
+                    })
+                    ->get();
+
+                if ($adminUsers->isNotEmpty()) {
+                    $telegramService = new \App\Services\TelegramService();
+                    foreach ($adminUsers as $adminUser) {
+                        $telegramService->sendNotification(
+                            $title,
+                            $message,
+                            $type,
+                            $data,
+                            (string)$adminUser->telegram_chat_id
+                        );
+                    }
+                }
             }
         } catch (\Exception $e) {
             // Логируем ошибку, но не прерываем создание уведомления
