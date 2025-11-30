@@ -324,10 +324,18 @@ class DeployController extends Controller
             // Получаем путь к composer
             $composerPath = $this->getComposerPath();
             
+            // Определяем HOME директорию (для composer)
+            $homeDir = getenv('HOME') ?: (getenv('USERPROFILE') ?: '/tmp');
+            
             // Используем PHP 8.2 для запуска composer
             $command = "{$this->phpPath} {$composerPath} install --no-dev --optimize-autoloader --no-interaction";
             
+            // Устанавливаем переменные окружения для composer
             $process = Process::path($this->basePath)
+                ->env([
+                    'HOME' => $homeDir,
+                    'COMPOSER_HOME' => $homeDir . '/.composer',
+                ])
                 ->run($command);
 
             if ($process->successful()) {
