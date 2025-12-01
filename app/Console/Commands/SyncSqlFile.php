@@ -193,20 +193,109 @@ class SyncSqlFile extends Command
         $username = $config['username'];
         $password = $config['password'];
         
-        $command = sprintf(
-            'mysqldump --host=%s --port=%s --user=%s --password=%s --single-transaction --routines --triggers %s > %s',
-            escapeshellarg($host),
-            escapeshellarg($port),
-            escapeshellarg($username),
-            escapeshellarg($password),
-            escapeshellarg($database),
-            escapeshellarg($outputFile)
-        );
+        // Сначала пробуем использовать mysqldump
+        $mysqldumpAvailable = $this->checkMysqldumpAvailable();
         
-        $process = Process::run($command);
+        if ($mysqldumpAvailable) {
+            $command = sprintf(
+                'mysqldump --host=%s --port=%s --user=%s --password=%s --single-transaction --routines --triggers %s > %s',
+                escapeshellarg($host),
+                escapeshellarg($port),
+                escapeshellarg($username),
+                escapeshellarg($password),
+                escapeshellarg($database),
+                escapeshellarg($outputFile)
+            );
+            
+            $process = Process::run($command);
+            
+            if ($process->successful()) {
+                return; // Успешно создан через mysqldump
+            }
+            
+            // Если mysqldump не сработал, пробуем через PHP
+            $this->warn('  ⚠️  mysqldump не сработал, используем PHP метод');
+        } else {
+            $this->line('  ℹ️  mysqldump не найден, используем PHP метод');
+        }
         
-        if (!$process->successful()) {
-            throw new \Exception("Ошибка создания дампа MySQL: " . $process->errorOutput());
+        // Альтернативный способ через PHP/PDO
+        $this->createMysqlDumpPhp($config, $outputFile);
+    }
+
+    /**
+     * Проверить доступность mysqldump
+     */
+    protected function checkMysqldumpAvailable(): bool
+    {
+        try {
+            $process = Process::run('mysqldump --version');
+            return $process->successful();
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Создание дампа MySQL через PHP
+     */
+    protected function createMysqlDumpPhp(array $config, string $outputFile): void
+    {
+        $host = $config['host'] ?? '127.0.0.1';
+        $port = $config['port'] ?? '3306';
+        $database = $config['database'];
+        $username = $config['username'];
+        $password = $config['password'];
+        
+        try {
+            $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
+            $pdo = new \PDO($dsn, $username, $password, [
+                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+            ]);
+            
+            $output = fopen($outputFile, 'w');
+            
+            // Записываем заголовок
+            fwrite($output, "-- MySQL dump created by PHP\n");
+            fwrite($output, "-- Host: {$host}:{$port}\n");
+            fwrite($output, "-- Database: {$database}\n");
+            fwrite($output, "-- Date: " . date('Y-m-d H:i:s') . "\n\n");
+            fwrite($output, "SET SQL_MODE = \"NO_AUTO_VALUE_ON_ZERO\";\n");
+            fwrite($output, "SET time_zone = \"+00:00\";\n\n");
+            
+            // Получаем все таблицы
+            $tables = $pdo->query("SHOW TABLES")->fetchAll(\PDO::FETCH_COLUMN);
+            
+            foreach ($tables as $table) {
+                // Получаем структуру таблицы
+                $createTable = $pdo->query("SHOW CREATE TABLE `{$table}`")->fetch(\PDO::FETCH_ASSOC);
+                fwrite($output, "\n--\n-- Table structure for table `{$table}`\n--\n\n");
+                fwrite($output, "DROP TABLE IF EXISTS `{$table}`;\n");
+                fwrite($output, $createTable['Create Table'] . ";\n\n");
+                
+                // Получаем данные
+                $rows = $pdo->query("SELECT * FROM `{$table}`")->fetchAll(\PDO::FETCH_ASSOC);
+                
+                if (count($rows) > 0) {
+                    fwrite($output, "\n--\n-- Dumping data for table `{$table}`\n--\n\n");
+                    
+                    foreach ($rows as $row) {
+                        $columns = array_keys($row);
+                        $values = array_map(function($value) use ($pdo) {
+                            return $value === null ? 'NULL' : $pdo->quote($value);
+                        }, array_values($row));
+                        
+                        $sql = "INSERT INTO `{$table}` (`" . implode('`, `', $columns) . "`) VALUES (" . implode(', ', $values) . ");\n";
+                        fwrite($output, $sql);
+                    }
+                    fwrite($output, "\n");
+                }
+            }
+            
+            fclose($output);
+            
+        } catch (\Exception $e) {
+            throw new \Exception("Ошибка создания дампа MySQL через PHP: " . $e->getMessage());
         }
     }
 
