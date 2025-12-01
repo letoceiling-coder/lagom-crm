@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Process;
+use ZipArchive;
 
 class DeployController extends Controller
 {
@@ -101,6 +102,9 @@ class DeployController extends Controller
 
             // Получаем новый commit hash
             $newCommitHash = $this->getCurrentCommitHash();
+
+            // Сохраняем время последнего deploy (для проверки в sync-sql-file)
+            $this->saveLastDeployTime();
 
             // Формируем успешный ответ
             $result['success'] = true;
@@ -820,6 +824,472 @@ class DeployController extends Controller
             ]);
         }
         return null;
+    }
+
+    /**
+     * Синхронизация БД и файлов с локальной разработки
+     */
+    public function syncSqlFile(Request $request)
+    {
+        $startTime = microtime(true);
+        Log::info('🔄 Начало синхронизации БД и файлов', [
+            'ip' => $request->ip(),
+            'timestamp' => now()->toDateTimeString(),
+        ]);
+
+        $result = [
+            'success' => false,
+            'message' => '',
+            'data' => [],
+        ];
+
+        try {
+            // Определяем PHP путь
+            $this->phpPath = $this->getPhpPath();
+            $this->phpVersion = $this->getPhpVersion();
+
+            $skipFiles = $request->input('skip_files') === '1' || $request->boolean('skip_files');
+            
+            // Проверяем, был ли недавно deploy (в течение последних 5 минут)
+            $shouldSkipFiles = $this->shouldSkipFilesSync($skipFiles);
+            
+            // 1. Восстановление БД
+            $dbResult = $this->restoreDatabase($request);
+            $result['data']['database_restored'] = $dbResult['success'] ? 'yes' : 'no';
+            if (!$dbResult['success']) {
+                throw new \Exception("Ошибка восстановления БД: {$dbResult['error']}");
+            }
+
+            // 2. Синхронизация файлов (если не пропущено)
+            $filesResult = ['processed' => 0, 'skipped' => 0];
+            if (!$shouldSkipFiles && $request->hasFile('files_archive')) {
+                $filesResult = $this->syncFiles($request);
+            } elseif ($shouldSkipFiles) {
+                Log::info('Пропущена синхронизация файлов: недавно был выполнен deploy');
+            }
+            
+            $result['data']['files_processed'] = $filesResult['processed'];
+            $result['data']['files_skipped'] = $filesResult['skipped'];
+
+            // 3. Очистка кешей после синхронизации
+            $this->clearAllCaches();
+
+            // Формируем успешный ответ
+            $result['success'] = true;
+            $result['message'] = 'Синхронизация успешно завершена';
+            $result['data'] = array_merge($result['data'], [
+                'php_version' => $this->phpVersion,
+                'php_path' => $this->phpPath,
+                'synced_at' => now()->toDateTimeString(),
+                'duration_seconds' => round(microtime(true) - $startTime, 2),
+            ]);
+
+            Log::info('✅ Синхронизация успешно завершена', $result['data']);
+
+        } catch (\Exception $e) {
+            $result['message'] = $e->getMessage();
+            $result['data']['error'] = $e->getMessage();
+            $result['data']['trace'] = config('app.debug') ? $e->getTraceAsString() : null;
+            $result['data']['synced_at'] = now()->toDateTimeString();
+            $result['data']['duration_seconds'] = round(microtime(true) - $startTime, 2);
+
+            Log::error('❌ Ошибка синхронизации', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+
+        return response()->json($result, $result['success'] ? 200 : 500);
+    }
+
+    /**
+     * Проверить, нужно ли пропустить синхронизацию файлов
+     */
+    protected function shouldSkipFilesSync(bool $forceSkip): bool
+    {
+        if ($forceSkip) {
+            return true;
+        }
+
+        // Проверяем, был ли недавно deploy (в течение последних 5 минут)
+        // Храним время последнего deploy в файле
+        $lastDeployFile = storage_path('app/last_deploy_time.txt');
+        
+        if (file_exists($lastDeployFile)) {
+            $lastDeployTime = (int) file_get_contents($lastDeployFile);
+            $timeSinceDeploy = time() - $lastDeployTime;
+            
+            // Если deploy был менее 5 минут назад, пропускаем синхронизацию файлов
+            if ($timeSinceDeploy < 300) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Восстановление базы данных из SQL дампа
+     */
+    protected function restoreDatabase(Request $request): array
+    {
+        try {
+            if (!$request->hasFile('sql_file')) {
+                return [
+                    'success' => false,
+                    'error' => 'SQL файл не предоставлен',
+                ];
+            }
+
+            $sqlFile = $request->file('sql_file');
+            $tempDir = storage_path('app/temp');
+            
+            // Создаем директорию если не существует
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+            
+            $tempSqlPath = $tempDir . '/sync_' . time() . '.sql';
+            
+            // Сохраняем загруженный файл
+            $sqlFile->move($tempDir, basename($tempSqlPath));
+
+            $connection = config('database.default');
+            $config = config("database.connections.{$connection}");
+
+            if ($connection === 'sqlite') {
+                // Для SQLite удаляем старую БД и создаем новую
+                $dbPath = $config['database'];
+                if (file_exists($dbPath)) {
+                    unlink($dbPath);
+                }
+                
+                // Восстанавливаем из SQL дампа
+                $this->restoreSqliteFromDump($tempSqlPath, $dbPath);
+            } elseif (in_array($connection, ['mysql', 'mariadb'])) {
+                // Для MySQL используем mysql команду
+                $this->restoreMysqlFromDump($config, $tempSqlPath);
+            } else {
+                return [
+                    'success' => false,
+                    'error' => "Неподдерживаемый тип БД: {$connection}",
+                ];
+            }
+
+            // Удаляем временный файл
+            @unlink($tempSqlPath);
+
+            return ['success' => true];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Восстановление SQLite из дампа
+     */
+    protected function restoreSqliteFromDump(string $dumpPath, string $dbPath): void
+    {
+        // Создаем новую БД
+        $db = new \PDO("sqlite:{$dbPath}");
+        $db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        
+        // Читаем и выполняем SQL дамп
+        $sql = file_get_contents($dumpPath);
+        
+        // Разбиваем на отдельные запросы
+        $statements = array_filter(
+            array_map('trim', explode(';', $sql)),
+            function($stmt) {
+                return !empty($stmt) && !preg_match('/^--/', $stmt);
+            }
+        );
+        
+        foreach ($statements as $statement) {
+            if (!empty(trim($statement))) {
+                $db->exec($statement);
+            }
+        }
+    }
+
+    /**
+     * Восстановление MySQL из дампа
+     */
+    protected function restoreMysqlFromDump(array $config, string $dumpPath): void
+    {
+        $host = $config['host'] ?? '127.0.0.1';
+        $port = $config['port'] ?? '3306';
+        $database = $config['database'];
+        $username = $config['username'];
+        $password = $config['password'];
+        
+        $command = sprintf(
+            'mysql --host=%s --port=%s --user=%s --password=%s %s < %s',
+            escapeshellarg($host),
+            escapeshellarg($port),
+            escapeshellarg($username),
+            escapeshellarg($password),
+            escapeshellarg($database),
+            escapeshellarg($dumpPath)
+        );
+        
+        $process = Process::run($command);
+        
+        if (!$process->successful()) {
+            throw new \Exception("Ошибка восстановления MySQL: " . $process->errorOutput());
+        }
+    }
+
+    /**
+     * Синхронизация файлов из архива
+     */
+    protected function syncFiles(Request $request): array
+    {
+        try {
+            if (!$request->hasFile('files_archive')) {
+                return ['processed' => 0, 'skipped' => 0];
+            }
+
+            $archive = $request->file('files_archive');
+            $tempDir = storage_path('app/temp');
+            
+            // Создаем директорию если не существует
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+            
+            $tempArchivePath = $tempDir . '/sync_files_' . time() . '.zip';
+            $archive->move($tempDir, basename($tempArchivePath));
+
+            $uploadDir = public_path('upload');
+            if (!is_dir($uploadDir)) {
+                \Illuminate\Support\Facades\File::makeDirectory($uploadDir, 0755, true);
+            }
+
+            if (!class_exists('ZipArchive')) {
+                throw new \Exception('Класс ZipArchive не доступен. Установите расширение php-zip');
+            }
+            
+            $zip = new ZipArchive();
+            if ($zip->open($tempArchivePath) !== true) {
+                throw new \Exception('Не удалось открыть ZIP архив');
+            }
+
+            $processed = 0;
+            $skipped = 0;
+            $fileHashes = $this->getExistingFileHashes($uploadDir);
+
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $filename = $zip->getNameIndex($i);
+                
+                if ($filename === false || strpos($filename, '__MACOSX/') !== false) {
+                    continue;
+                }
+
+                $targetPath = $uploadDir . '/' . $filename;
+                $targetDir = dirname($targetPath);
+                
+                if (!is_dir($targetDir)) {
+                    \Illuminate\Support\Facades\File::makeDirectory($targetDir, 0755, true);
+                }
+
+                // Извлекаем файл во временную директорию для проверки
+                $tempFile = storage_path('app/temp/' . basename($filename));
+                file_put_contents($tempFile, $zip->getFromIndex($i));
+                
+                // Проверяем на дубли по хешу
+                $fileHash = md5_file($tempFile);
+                $relativePath = str_replace(public_path('upload') . '/', '', $targetPath);
+                
+                if (isset($fileHashes[$relativePath]) && $fileHashes[$relativePath] === $fileHash) {
+                    // Файл уже существует с тем же хешем - пропускаем
+                    $skipped++;
+                    @unlink($tempFile);
+                    continue;
+                }
+
+                // Копируем файл
+                if (copy($tempFile, $targetPath)) {
+                    $processed++;
+                    // Обновляем хеш
+                    $fileHashes[$relativePath] = $fileHash;
+                }
+                
+                @unlink($tempFile);
+            }
+
+            $zip->close();
+            @unlink($tempArchivePath);
+
+            return [
+                'processed' => $processed,
+                'skipped' => $skipped,
+            ];
+        } catch (\Exception $e) {
+            Log::error('Ошибка синхронизации файлов', ['error' => $e->getMessage()]);
+            return [
+                'processed' => 0,
+                'skipped' => 0,
+            ];
+        }
+    }
+
+    /**
+     * Получить хеши существующих файлов для предотвращения дублей
+     */
+    protected function getExistingFileHashes(string $uploadDir): array
+    {
+        $hashes = [];
+        
+        if (!is_dir($uploadDir)) {
+            return $hashes;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($uploadDir, \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if ($file->isFile()) {
+                $relativePath = str_replace(public_path('upload') . '/', '', $file->getPathname());
+                $hashes[$relativePath] = md5_file($file->getPathname());
+            }
+        }
+
+        return $hashes;
+    }
+
+    /**
+     * Сохранить время последнего deploy
+     */
+    protected function saveLastDeployTime(): void
+    {
+        try {
+            $lastDeployFile = storage_path('app/last_deploy_time.txt');
+            $dir = dirname($lastDeployFile);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            file_put_contents($lastDeployFile, (string) time());
+        } catch (\Exception $e) {
+            Log::warning('Не удалось сохранить время последнего deploy', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Проверка требований для синхронизации (API endpoint)
+     */
+    public function checkSyncRequirements()
+    {
+        $result = [
+            'success' => true,
+            'message' => '',
+            'data' => [],
+        ];
+
+        try {
+            // Проверка PHP Zip
+            $zipAvailable = extension_loaded('zip') && class_exists('ZipArchive');
+            $result['data']['php_zip'] = [
+                'available' => $zipAvailable,
+                'message' => $zipAvailable ? 'Установлено' : 'НЕ установлено',
+            ];
+
+            // Проверка MySQL утилит
+            $connection = config('database.default');
+            $config = config("database.connections.{$connection}");
+            
+            if (in_array($connection, ['mysql', 'mariadb'])) {
+                // Проверка mysqldump
+                $mysqldumpCheck = Process::run('which mysqldump');
+                $mysqldumpAvailable = $mysqldumpCheck->successful() && !empty(trim($mysqldumpCheck->output()));
+                
+                // Проверка mysql
+                $mysqlCheck = Process::run('which mysql');
+                $mysqlAvailable = $mysqlCheck->successful() && !empty(trim($mysqlCheck->output()));
+
+                $result['data']['mysql_tools'] = [
+                    'mysqldump' => [
+                        'available' => $mysqldumpAvailable,
+                        'path' => $mysqldumpAvailable ? trim($mysqldumpCheck->output()) : null,
+                    ],
+                    'mysql' => [
+                        'available' => $mysqlAvailable,
+                        'path' => $mysqlAvailable ? trim($mysqlCheck->output()) : null,
+                    ],
+                ];
+
+                // Проверка подключения к БД
+                try {
+                    \DB::connection()->getPdo();
+                    $result['data']['database_connection'] = [
+                        'available' => true,
+                        'database' => $config['database'],
+                        'host' => $config['host'] . ':' . $config['port'],
+                    ];
+                } catch (\Exception $e) {
+                    $result['data']['database_connection'] = [
+                        'available' => false,
+                        'error' => $e->getMessage(),
+                    ];
+                }
+            } elseif ($connection === 'sqlite') {
+                $sqliteCheck = Process::run('which sqlite3');
+                $sqliteAvailable = $sqliteCheck->successful() && !empty(trim($sqliteCheck->output()));
+                
+                $result['data']['sqlite_tool'] = [
+                    'available' => $sqliteAvailable,
+                    'path' => $sqliteAvailable ? trim($sqliteCheck->output()) : null,
+                    'message' => $sqliteAvailable ? 'sqlite3 найден' : 'sqlite3 не найден (будет использован PHP метод)',
+                ];
+            }
+
+            // Проверка прав доступа
+            $uploadDir = public_path('upload');
+            $tempDir = storage_path('app/temp');
+            
+            $result['data']['permissions'] = [
+                'upload_dir' => [
+                    'exists' => is_dir($uploadDir),
+                    'writable' => is_dir($uploadDir) ? is_writable($uploadDir) : false,
+                    'path' => $uploadDir,
+                ],
+                'temp_dir' => [
+                    'exists' => is_dir($tempDir),
+                    'writable' => is_dir($tempDir) ? is_writable($tempDir) : (is_writable(dirname($tempDir))),
+                    'path' => $tempDir,
+                ],
+            ];
+
+            // Проверка конфигурации
+            $result['data']['configuration'] = [
+                'server_url' => env('SERVER_URL') ? 'настроен' : 'не настроен',
+                'deploy_token' => env('DEPLOY_TOKEN') ? 'настроен' : 'не настроен',
+            ];
+
+            // Общий статус
+            $allOk = $zipAvailable;
+            if (in_array($connection, ['mysql', 'mariadb'])) {
+                $allOk = $allOk && $mysqldumpAvailable && $mysqlAvailable;
+            }
+
+            $result['success'] = $allOk;
+            $result['message'] = $allOk 
+                ? 'Все требования выполнены' 
+                : 'Некоторые требования не выполнены';
+
+        } catch (\Exception $e) {
+            $result['success'] = false;
+            $result['message'] = $e->getMessage();
+            $result['data']['error'] = $e->getMessage();
+        }
+
+        return response()->json($result, $result['success'] ? 200 : 500);
     }
 }
 

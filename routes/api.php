@@ -10,16 +10,25 @@ use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\ChapterController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\CaseController;
+use App\Http\Controllers\Api\OptionController;
+use App\Http\Controllers\Api\OptionTreeController;
+use App\Http\Controllers\Api\InstanceController;
 use App\Http\Controllers\Api\DecisionBlockSettingsController;
 use App\Http\Controllers\Api\QuizController;
 use App\Http\Controllers\Api\QuizBlockSettingsController;
 use App\Http\Controllers\Api\QuizSubmissionController;
 use App\Http\Controllers\Api\HowWorkBlockSettingsController;
 use App\Http\Controllers\Api\FaqBlockSettingsController;
+use App\Http\Controllers\Api\ModalSettingsController;
+use App\Http\Controllers\Api\ProductRequestController;
+use App\Http\Controllers\Api\FeedbackController;
 use App\Http\Controllers\Api\DeployController;
 use App\Http\Controllers\Api\TelegramSettingsController;
 use App\Http\Controllers\Api\TelegramWebhookController;
 use App\Http\Controllers\Api\TelegramAdminRequestController;
+use App\Http\Controllers\Api\ContactSettingsController;
+use App\Http\Controllers\Api\AboutSettingsController;
 use App\Http\Controllers\Api\v1\FolderController;
 use App\Http\Controllers\Api\v1\MediaController;
 use Illuminate\Support\Facades\Route;
@@ -79,6 +88,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('services/export', [ServiceController::class, 'export']);
             Route::post('services/import', [ServiceController::class, 'import']);
             Route::apiResource('services', ServiceController::class);
+            Route::apiResource('cases', CaseController::class);
+            Route::apiResource('options', OptionController::class);
+            Route::apiResource('option-trees', OptionTreeController::class);
+            Route::apiResource('instances', InstanceController::class);
             Route::get('decision-block-settings', [DecisionBlockSettingsController::class, 'show']);
             Route::put('decision-block-settings', [DecisionBlockSettingsController::class, 'update']);
             Route::apiResource('quizzes', QuizController::class);
@@ -92,9 +105,16 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('telegram-settings', [TelegramSettingsController::class, 'update']);
             Route::post('telegram-settings/test', [TelegramSettingsController::class, 'testConnection']);
             Route::get('telegram-settings/webhook-info', [TelegramSettingsController::class, 'getWebhookInfo']);
+            Route::get('contact-settings', [ContactSettingsController::class, 'show']);
+            Route::put('contact-settings', [ContactSettingsController::class, 'update']);
+            Route::get('about-settings', [AboutSettingsController::class, 'show']);
+            Route::put('about-settings', [AboutSettingsController::class, 'update']);
             Route::get('telegram-admin-requests', [TelegramAdminRequestController::class, 'index']);
             Route::post('telegram-admin-requests/{id}/approve', [TelegramAdminRequestController::class, 'approve']);
             Route::post('telegram-admin-requests/{id}/reject', [TelegramAdminRequestController::class, 'reject']);
+            Route::apiResource('modal-settings', ModalSettingsController::class);
+            Route::get('product-requests/stats', [ProductRequestController::class, 'stats']);
+            Route::apiResource('product-requests', ProductRequestController::class);
         });
     });
 });
@@ -120,11 +140,45 @@ Route::get('/public/how-work-block/settings', [HowWorkBlockSettingsController::c
 // Публичные маршруты для FAQ Block (без авторизации)
 Route::get('/public/faq-block/settings', [FaqBlockSettingsController::class, 'show']);
 
+// Публичные маршруты для Cases (без авторизации)
+Route::get('/public/cases', [CaseController::class, 'index']);
+Route::get('/public/cases/{id}', [CaseController::class, 'show']);
+
+// Публичные маршруты для Products (без авторизации)
+Route::get('/public/products', [ProductController::class, 'index']);
+Route::get('/public/products/{slug}', [ProductController::class, 'showBySlug']);
+Route::post('/public/leave-products', [ProductController::class, 'submitRequest']);
+Route::post('/public/leave-services', [ServiceController::class, 'submitRequest']);
+
+// Публичные маршруты для Services (без авторизации)
+Route::get('/public/services', [ServiceController::class, 'index']);
+Route::get('/public/services/{slug}', [ServiceController::class, 'showBySlug']);
+
+// Публичные маршруты для Modal Settings (без авторизации)
+Route::get('/public/modal-settings/{type}', [ModalSettingsController::class, 'show']);
+
+// Публичные маршруты для обратной связи (без авторизации)
+Route::post('/public/feedback', [FeedbackController::class, 'submit']);
+
+// Публичные маршруты для настроек контактов (без авторизации)
+Route::get('/public/contact-settings', [ContactSettingsController::class, 'show']);
+
+// Публичные маршруты для настроек страницы "О нас" (без авторизации)
+Route::get('/public/about-settings', [AboutSettingsController::class, 'show']);
+
 // Публичный webhook для Telegram (без авторизации)
 Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle']);
 
 // Маршрут для деплоя (защищен токеном)
 Route::post('/deploy', [DeployController::class, 'deploy'])
+    ->middleware('deploy.token');
+
+// Маршрут для синхронизации БД и файлов (защищен токеном)
+Route::post('/sync-sql-file', [DeployController::class, 'syncSqlFile'])
+    ->middleware('deploy.token');
+
+// Маршрут для проверки требований синхронизации (защищен токеном)
+Route::get('/sync-check-requirements', [DeployController::class, 'checkSyncRequirements'])
     ->middleware('deploy.token');
 
 
