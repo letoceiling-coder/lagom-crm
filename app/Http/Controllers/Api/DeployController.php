@@ -1112,14 +1112,8 @@ class DeployController extends Controller
         $password = $config['password'];
         
         try {
-            $dsn = "mysql:host={$host};port={$port};charset=utf8mb4";
-            $pdo = new \PDO($dsn, $username, $password, [
-                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-            ]);
-            
-            // Создаем БД если не существует
-            $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-            $pdo->exec("USE `{$database}`");
+            // Используем существующее подключение Laravel (уже настроено правильно)
+            $pdo = \DB::connection()->getPdo();
             
             // Читаем SQL дамп
             $sql = file_get_contents($dumpPath);
