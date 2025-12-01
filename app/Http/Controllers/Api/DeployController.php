@@ -1026,20 +1026,154 @@ class DeployController extends Controller
         $username = $config['username'];
         $password = $config['password'];
         
-        $command = sprintf(
-            'mysql --host=%s --port=%s --user=%s --password=%s %s < %s',
-            escapeshellarg($host),
-            escapeshellarg($port),
-            escapeshellarg($username),
-            escapeshellarg($password),
-            escapeshellarg($database),
-            escapeshellarg($dumpPath)
-        );
+        // Сначала пробуем использовать mysql команду
+        $mysqlAvailable = $this->checkMysqlAvailable();
         
-        $process = Process::run($command);
+        if ($mysqlAvailable) {
+            $command = sprintf(
+                'mysql --host=%s --port=%s --user=%s --password=%s %s < %s',
+                escapeshellarg($host),
+                escapeshellarg($port),
+                escapeshellarg($username),
+                escapeshellarg($password),
+                escapeshellarg($database),
+                escapeshellarg($dumpPath)
+            );
+            
+            $process = Process::run($command);
+            
+            if ($process->successful()) {
+                return; // Успешно восстановлено через mysql
+            }
+            
+            // Если mysql не сработал, пробуем через PHP
+            Log::warning('mysql команда не сработала, используем PHP метод', [
+                'error' => $process->errorOutput(),
+            ]);
+        } else {
+            Log::info('mysql не найден, используем PHP метод');
+        }
         
-        if (!$process->successful()) {
-            throw new \Exception("Ошибка восстановления MySQL: " . $process->errorOutput());
+        // Альтернативный способ через PHP/PDO
+        $this->restoreMysqlFromDumpPhp($config, $dumpPath);
+    }
+
+    /**
+     * Проверить доступность mysql команды
+     */
+    protected function checkMysqlAvailable(): bool
+    {
+        try {
+            $process = Process::run('which mysql');
+            return $process->successful() && !empty(trim($process->output()));
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Восстановление MySQL из дампа через PHP
+     */
+    protected function restoreMysqlFromDumpPhp(array $config, string $dumpPath): void
+    {
+        $host = $config['host'] ?? '127.0.0.1';
+        $port = $config['port'] ?? '3306';
+        $database = $config['database'];
+        $username = $config['username'];
+        $password = $config['password'];
+        
+        try {
+            $dsn = "mysql:host={$host};port={$port};charset=utf8mb4";
+            $pdo = new \PDO($dsn, $username, $password, [
+                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+            ]);
+            
+            // Создаем БД если не существует
+            $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            $pdo->exec("USE `{$database}`");
+            
+            // Читаем SQL дамп
+            $sql = file_get_contents($dumpPath);
+            
+            if (empty($sql)) {
+                throw new \Exception('SQL дамп пуст или не может быть прочитан');
+            }
+            
+            // Удаляем комментарии и разбиваем на запросы
+            $sql = preg_replace('/--.*$/m', '', $sql); // Удаляем однострочные комментарии
+            $sql = preg_replace('/\/\*.*?\*\//s', '', $sql); // Удаляем многострочные комментарии
+            
+            // Разбиваем на отдельные запросы
+            $statements = array_filter(
+                array_map('trim', preg_split('/;\s*$/m', $sql)),
+                function($stmt) {
+                    return !empty($stmt) && !preg_match('/^(SET|USE)/i', $stmt);
+                }
+            );
+            
+            // Выполняем запросы по частям (батчами для больших дампов)
+            $batchSize = 100;
+            $batch = [];
+            $executed = 0;
+            
+            foreach ($statements as $statement) {
+                $statement = trim($statement);
+                if (empty($statement)) {
+                    continue;
+                }
+                
+                $batch[] = $statement;
+                
+                if (count($batch) >= $batchSize) {
+                    $this->executeBatch($pdo, $batch);
+                    $executed += count($batch);
+                    $batch = [];
+                }
+            }
+            
+            // Выполняем оставшиеся запросы
+            if (!empty($batch)) {
+                $this->executeBatch($pdo, $batch);
+                $executed += count($batch);
+            }
+            
+            Log::info("Восстановлено запросов: {$executed}");
+            
+        } catch (\Exception $e) {
+            throw new \Exception("Ошибка восстановления MySQL через PHP: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Выполнить батч SQL запросов
+     */
+    protected function executeBatch(\PDO $pdo, array $statements): void
+    {
+        $pdo->beginTransaction();
+        
+        try {
+            foreach ($statements as $statement) {
+                if (!empty(trim($statement))) {
+                    $pdo->exec($statement);
+                }
+            }
+            $pdo->commit();
+        } catch (\Exception $e) {
+            $pdo->rollBack();
+            // Пробуем выполнить по одному для определения проблемного запроса
+            foreach ($statements as $statement) {
+                if (!empty(trim($statement))) {
+                    try {
+                        $pdo->exec($statement);
+                    } catch (\Exception $singleError) {
+                        // Логируем ошибку, но продолжаем
+                        Log::warning('Ошибка выполнения SQL запроса', [
+                            'error' => $singleError->getMessage(),
+                            'statement' => substr($statement, 0, 200),
+                        ]);
+                    }
+                }
+            }
         }
     }
 
