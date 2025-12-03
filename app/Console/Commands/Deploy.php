@@ -18,7 +18,8 @@ class Deploy extends Command
                             {--message= : Кастомное сообщение для коммита}
                             {--skip-build : Пропустить npm run build}
                             {--dry-run : Показать что будет сделано без выполнения}
-                            {--insecure : Отключить проверку SSL сертификата (для разработки)}';
+                            {--insecure : Отключить проверку SSL сертификата (для разработки)}
+                            {--with-seed : Выполнить seeders на сервере (по умолчанию пропускаются)}';
 
     /**
      * The console command description.
@@ -345,6 +346,7 @@ class Deploy extends Command
                     'commit_hash' => $commitHash,
                     'deployed_by' => get_current_user(),
                     'timestamp' => now()->toDateTimeString(),
+                    'run_seeders' => $this->option('with-seed'), // Передаем флаг выполнения seeders
                 ]);
 
             if ($response->successful()) {
@@ -362,6 +364,19 @@ class Deploy extends Command
                         $this->line("     Миграции: {$migrations['message']}");
                     } else {
                         $this->warn("     Миграции: ошибка - {$migrations['error']}");
+                    }
+                }
+                
+                if (isset($data['data']['seeders'])) {
+                    $seeders = $data['data']['seeders'];
+                    if ($seeders['status'] === 'skipped') {
+                        $this->line("     Seeders: {$seeders['message']}");
+                    } elseif ($seeders['status'] === 'success') {
+                        $this->line("     Seeders: {$seeders['message']}");
+                    } elseif ($seeders['status'] === 'partial') {
+                        $this->warn("     Seeders: {$seeders['message']}");
+                    } else {
+                        $this->warn("     Seeders: ошибка - " . ($seeders['error'] ?? 'неизвестная ошибка'));
                     }
                 }
                 

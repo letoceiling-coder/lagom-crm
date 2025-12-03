@@ -96,6 +96,20 @@ class DeployController extends Controller
                 throw new \Exception("Ошибка миграций: {$migrationsResult['error']}");
             }
 
+            // 3.5. Выполнение seeders (только если явно запрошено)
+            $runSeeders = $request->input('run_seeders', false);
+            if ($runSeeders) {
+                $seedersResult = $this->runSeeders();
+                $result['data']['seeders'] = $seedersResult;
+                Log::info('Seeders выполнены по запросу');
+            } else {
+                $result['data']['seeders'] = [
+                    'status' => 'skipped',
+                    'message' => 'Seeders пропущены (используйте --with-seed для выполнения)',
+                ];
+                Log::info('Seeders пропущены (не указан флаг run_seeders)');
+            }
+
             // 4. Очистка временных файлов разработки
             $this->cleanDevelopmentFiles();
 
@@ -606,6 +620,80 @@ class DeployController extends Controller
             return [
                 'status' => 'error',
                 'error' => $process->errorOutput() ?: $process->output(),
+            ];
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Выполнить seeders
+     */
+    protected function runSeeders(): array
+    {
+        try {
+            $seeders = [
+                'RoleSeeder',
+                'MenuSeeder',
+                'AppCategorySeeder',
+                'CasesBlockSettingsSeeder',
+                'HowWorkBlockSettingsSeeder',
+                'FaqBlockSettingsSeeder',
+                'WhyChooseUsBlockSettingsSeeder',
+                'AboutSettingsSeeder',
+                'ContactSettingsSeeder',
+                'FooterSettingsSeeder',
+                'ImportProductsServicesSeeder', // Импорт данных продуктов, сервисов и баннеров
+                'RegisterAllMediaFilesSeeder',
+                'UpdateMediaFolderSeeder',
+            ];
+
+            $results = [];
+            $totalSuccess = 0;
+            $totalFailed = 0;
+
+            foreach ($seeders as $seeder) {
+                try {
+                    Log::info("Выполнение seeder: {$seeder}");
+                    $process = Process::path($this->basePath)
+                        ->timeout(300) // 5 минут на каждый seeder
+                        ->run("{$this->phpPath} artisan db:seed --class={$seeder}");
+
+                    if ($process->successful()) {
+                        $results[$seeder] = 'success';
+                        $totalSuccess++;
+                        Log::info("✅ Seeder выполнен успешно: {$seeder}");
+                    } else {
+                        $error = $process->errorOutput() ?: $process->output();
+                        $results[$seeder] = 'error: ' . substr($error, 0, 200);
+                        $totalFailed++;
+                        Log::warning("⚠️ Ошибка выполнения seeder: {$seeder}", [
+                            'error' => $error,
+                        ]);
+                        // Продолжаем выполнение остальных seeders даже при ошибке
+                    }
+                } catch (\Exception $e) {
+                    $results[$seeder] = 'exception: ' . $e->getMessage();
+                    $totalFailed++;
+                    Log::error("❌ Исключение при выполнении seeder: {$seeder}", [
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Продолжаем выполнение остальных seeders
+                }
+            }
+
+            return [
+                'status' => $totalFailed === 0 ? 'success' : 'partial',
+                'total' => count($seeders),
+                'success' => $totalSuccess,
+                'failed' => $totalFailed,
+                'results' => $results,
+                'message' => $totalFailed === 0
+                    ? "Все seeders выполнены успешно ({$totalSuccess})"
+                    : "Выполнено seeders: {$totalSuccess}, ошибок: {$totalFailed}",
             ];
         } catch (\Exception $e) {
             return [
