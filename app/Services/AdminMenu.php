@@ -249,8 +249,18 @@ class AdminMenu
             return collect([]);
         }
 
+        // Загружаем роли пользователя, если они еще не загружены
+        if (!$user->relationLoaded('roles')) {
+            $user->load('roles');
+        }
+
         // Получаем роли пользователя
         $userRoles = $user->roles->pluck('slug')->toArray();
+        
+        // Если у пользователя нет ролей, возвращаем пустое меню
+        if (empty($userRoles)) {
+            return collect([]);
+        }
 
         // Фильтруем меню по ролям
         return $menu->map(function ($item) use ($userRoles) {

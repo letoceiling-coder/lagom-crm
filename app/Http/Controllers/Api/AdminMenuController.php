@@ -20,7 +20,21 @@ class AdminMenuController extends Controller
      */
     public function index(Request $request)
     {
-        $menu = $this->adminMenu->getMenuJson($request->user());
+        $user = $request->user();
+        
+        // Если пользователь не аутентифицирован, возвращаем пустое меню
+        if (!$user) {
+            return response()->json([
+                'menu' => [],
+            ]);
+        }
+        
+        // Загружаем роли пользователя, если они еще не загружены
+        if (!$user->relationLoaded('roles')) {
+            $user->load('roles');
+        }
+        
+        $menu = $this->adminMenu->getMenuJson($user);
 
         return response()->json([
             'menu' => $menu,

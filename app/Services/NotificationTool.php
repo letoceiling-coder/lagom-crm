@@ -66,41 +66,63 @@ class NotificationTool
                 ]);
                 
                 if ($telegramSettings->is_enabled && $telegramSettings->send_notifications) {
-                // Получаем всех администраторов с telegram_chat_id
-                $adminUsers = \App\Models\User::whereNotNull('telegram_chat_id')
-                    ->whereHas('roles', function ($query) {
-                        $query->whereIn('slug', ['admin', 'manager']);
-                    })
-                    ->get();
+                    // Получаем всех администраторов с telegram_chat_id
+                    $adminUsers = \App\Models\User::whereNotNull('telegram_chat_id')
+                        ->whereHas('roles', function ($query) {
+                            $query->whereIn('slug', ['admin', 'manager']);
+                        })
+                        ->get();
 
-                \Illuminate\Support\Facades\Log::debug('Telegram admins found', [
-                    'count' => $adminUsers->count(),
-                    'admin_ids' => $adminUsers->pluck('id')->toArray(),
-                ]);
+                    \Illuminate\Support\Facades\Log::debug('Telegram admins found', [
+                        'count' => $adminUsers->count(),
+                        'admin_ids' => $adminUsers->pluck('id')->toArray(),
+                        'chat_ids' => $adminUsers->pluck('telegram_chat_id')->toArray(),
+                    ]);
 
-                if ($adminUsers->isNotEmpty()) {
-                    $telegramService = new \App\Services\TelegramService();
-                    foreach ($adminUsers as $adminUser) {
-                        $sent = $telegramService->sendNotification(
-                            $title,
-                            $message,
-                            $type,
-                            $data,
-                            (string)$adminUser->telegram_chat_id
-                        );
+                    if ($adminUsers->isNotEmpty()) {
+                        $telegramService = new \App\Services\TelegramService();
+                        foreach ($adminUsers as $adminUser) {
+                            try {
+                                $sent = $telegramService->sendNotification(
+                                    $title,
+                                    $message,
+                                    $type,
+                                    $data,
+                                    (string)$adminUser->telegram_chat_id
+                                );
+                                
+                                \Illuminate\Support\Facades\Log::info('Telegram notification sent', [
+                                    'admin_id' => $adminUser->id,
+                                    'admin_email' => $adminUser->email,
+                                    'chat_id' => $adminUser->telegram_chat_id,
+                                    'sent' => $sent,
+                                    'title' => $title,
+                                ]);
+                            } catch (\Exception $e) {
+                                \Illuminate\Support\Facades\Log::error('Failed to send Telegram notification to user', [
+                                    'admin_id' => $adminUser->id,
+                                    'chat_id' => $adminUser->telegram_chat_id,
+                                    'error' => $e->getMessage(),
+                                ]);
+                            }
+                        }
+                    } else {
+                        // Проверяем, есть ли администраторы без telegram_chat_id
+                        $allAdmins = \App\Models\User::whereHas('roles', function ($query) {
+                            $query->whereIn('slug', ['admin', 'manager']);
+                        })->get();
                         
-                        \Illuminate\Support\Facades\Log::info('Telegram notification sent', [
-                            'admin_id' => $adminUser->id,
-                            'chat_id' => $adminUser->telegram_chat_id,
-                            'sent' => $sent,
-                            'title' => $title,
+                        $adminsWithoutChatId = $allAdmins->filter(function ($user) {
+                            return empty($user->telegram_chat_id);
+                        });
+                        
+                        \Illuminate\Support\Facades\Log::warning('No Telegram admins found for notification', [
+                            'notification_id' => $notification->id,
+                            'total_admins' => $allAdmins->count(),
+                            'admins_without_chat_id' => $adminsWithoutChatId->count(),
+                            'admin_emails_without_chat_id' => $adminsWithoutChatId->pluck('email')->toArray(),
                         ]);
                     }
-                } else {
-                    \Illuminate\Support\Facades\Log::warning('No Telegram admins found for notification', [
-                        'notification_id' => $notification->id,
-                    ]);
-                }
                 } else {
                     \Illuminate\Support\Facades\Log::debug('Telegram notifications disabled', [
                         'is_enabled' => $telegramSettings->is_enabled,
