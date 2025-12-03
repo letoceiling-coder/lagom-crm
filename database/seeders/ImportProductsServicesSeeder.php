@@ -40,8 +40,11 @@ class ImportProductsServicesSeeder extends Seeder
                         return filemtime($b) - filemtime($a);
                     });
                     $this->importFile = $files[0];
+                    $this->command->info("📁 Автоматически выбран файл: " . basename($this->importFile));
                 }
             }
+        } else {
+            $this->command->info("📁 Используется указанный файл: " . basename($this->importFile));
         }
 
         if (!File::exists($this->importFile)) {
@@ -351,27 +354,49 @@ class ImportProductsServicesSeeder extends Seeder
     {
         $this->command->info('🎨 Импорт баннеров...');
         
+        if (empty($banners)) {
+            $this->command->warn('⚠️ Баннеры не найдены в файле экспорта');
+            return;
+        }
+        
         $imported = 0;
         foreach ($banners as $bannerData) {
-            Banner::updateOrCreate(
-                ['id' => $bannerData['id']],
-                [
-                    'title' => $bannerData['title'],
-                    'slug' => $bannerData['slug'],
-                    'background_image' => $bannerData['background_image'] ?? null,
-                    'heading_1' => $bannerData['heading_1'] ?? null,
-                    'heading_2' => $bannerData['heading_2'] ?? null,
-                    'description' => $bannerData['description'] ?? null,
-                    'button_text' => $bannerData['button_text'] ?? null,
-                    'button_type' => $bannerData['button_type'] ?? 'url',
-                    'button_value' => $bannerData['button_value'] ?? null,
-                    'height_desktop' => $bannerData['height_desktop'] ?? null,
-                    'height_mobile' => $bannerData['height_mobile'] ?? null,
-                    'is_active' => $bannerData['is_active'] ?? true,
-                    'order' => $bannerData['order'] ?? 0,
-                ]
-            );
-            $imported++;
+            try {
+                // Используем slug для поиска, так как он уникален и более надежен
+                $banner = Banner::updateOrCreate(
+                    ['slug' => $bannerData['slug']],
+                    [
+                        'title' => $bannerData['title'],
+                        'background_image' => $bannerData['background_image'] ?? null,
+                        'heading_1' => $bannerData['heading_1'] ?? null,
+                        'heading_2' => $bannerData['heading_2'] ?? null,
+                        'description' => $bannerData['description'] ?? null,
+                        'button_text' => $bannerData['button_text'] ?? null,
+                        'button_type' => $bannerData['button_type'] ?? 'url',
+                        'button_value' => $bannerData['button_value'] ?? null,
+                        'height_desktop' => $bannerData['height_desktop'] ?? null,
+                        'height_mobile' => $bannerData['height_mobile'] ?? null,
+                        'is_active' => $bannerData['is_active'] ?? true,
+                        'order' => $bannerData['order'] ?? 0,
+                    ]
+                );
+                
+                // Если ID был указан и отличается, обновляем его (для совместимости)
+                if (isset($bannerData['id']) && $banner->id != $bannerData['id']) {
+                    // Не обновляем ID, так как это может вызвать проблемы
+                    // Просто логируем
+                    $this->command->warn("⚠️ ID баннера отличается: ожидался {$bannerData['id']}, получен {$banner->id}");
+                }
+                
+                $imported++;
+                $this->command->line("  ✅ Баннер импортирован: {$banner->title} (slug: {$banner->slug})");
+            } catch (\Exception $e) {
+                $this->command->error("  ❌ Ошибка импорта баннера: " . $e->getMessage());
+                Log::error('Ошибка импорта баннера', [
+                    'banner_data' => $bannerData,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         $this->command->info("✅ Импортировано баннеров: {$imported}");
