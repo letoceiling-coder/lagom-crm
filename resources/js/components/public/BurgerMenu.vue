@@ -9,7 +9,8 @@
     >
         <div 
             v-if="isOpen"
-            class="fixed top-0 left-0 w-full h-full overflow-y-auto bg-[#6C7B6D] z-[5]"
+            class="fixed top-0 left-0 w-full h-full overflow-y-auto bg-[#6C7B6D] z-[9999] opacity-100"
+            style="background-color: #6C7B6D;"
             @click.self="$emit('close')"
         >
             <div class="w-full max-w-[1200px] mx-auto px-4 sm:px-[15px]">

@@ -49,3 +49,4 @@ class CaseCardSettings extends Model
 }
 
 
+
