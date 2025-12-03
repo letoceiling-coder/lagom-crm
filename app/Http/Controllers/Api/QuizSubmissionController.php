@@ -235,22 +235,22 @@ class QuizSubmissionController extends Controller
                     ]);
                     $emailError = 'Невалидный email адрес';
                 } else {
-                    // Проверяем настройки почты перед отправкой
-                    $mailConfig = config('mail.default');
-                    Log::info('Попытка отправки email', [
-                        'email' => $request->contact['email'],
-                        'mailer' => $mailConfig,
-                        'host' => config('mail.mailers.smtp.host'),
-                    ]);
+                // Проверяем настройки почты перед отправкой
+                $mailConfig = config('mail.default');
+                Log::info('Попытка отправки email', [
+                    'email' => $request->contact['email'],
+                    'mailer' => $mailConfig,
+                    'host' => config('mail.mailers.smtp.host'),
+                ]);
 
-                    Mail::to($request->contact['email'])
-                        ->send(new QuizCompletionMail($quizForEmail, $emailAnswers, $request->contact));
-                    
-                    $emailSent = true;
-                    Log::info('✅ Email с результатами квиза успешно отправлен', [
-                        'email' => $request->contact['email'],
-                        'quiz_id' => $quiz->id,
-                    ]);
+                Mail::to($request->contact['email'])
+                    ->send(new QuizCompletionMail($quizForEmail, $emailAnswers, $request->contact));
+                
+                $emailSent = true;
+                Log::info('✅ Email с результатами квиза успешно отправлен', [
+                    'email' => $request->contact['email'],
+                    'quiz_id' => $quiz->id,
+                ]);
                 }
             } catch (\Exception $e) {
                 $emailError = $e->getMessage();

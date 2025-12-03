@@ -1,5 +1,15 @@
 <template>
     <div class="service-page min-h-screen bg-background">
+        <SEOHead
+            v-if="service"
+            :title="serviceTitle"
+            :description="serviceDescription"
+            :keywords="serviceKeywords"
+            :og-image="serviceImage"
+            :canonical="canonicalUrl"
+            :schema="serviceSchema"
+        />
+        
         <div class="w-full px-3 sm:px-4 md:px-5">
             <div class="w-full max-w-[1200px] mx-auto">
                 <!-- Skeleton Loader -->
@@ -174,6 +184,7 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import SEOHead from '../components/SEOHead.vue';
 import DecisionCard from '../components/public/DecisionCard.vue';
 import LazyImage from '../components/public/LazyImage.vue';
 import ProductSkeleton from '../components/public/ProductSkeleton.vue';
@@ -185,6 +196,7 @@ import ServiceSuccessStage from '../components/public/service/SuccessStage.vue';
 export default {
     name: 'ServicePage',
     components: {
+        SEOHead,
         DecisionCard,
         LazyImage,
         ProductSkeleton,
@@ -463,6 +475,91 @@ export default {
             }
         });
 
+        // SEO computed properties
+        const serviceTitle = computed(() => {
+            if (!service.value) return 'Услуга - Lagom';
+            if (service.value.seo_title) return service.value.seo_title;
+            return `${service.value.name} - Lagom | Профессиональные услуги`;
+        });
+
+        const serviceDescription = computed(() => {
+            if (!service.value) return 'Подробная информация об услуге. Профессиональные услуги по работе с земельными участками.';
+            if (service.value.seo_description) return service.value.seo_description;
+            const desc = service.value.description;
+            const descriptionText = typeof desc === 'string' ? desc : desc?.ru || '';
+            // Если описание есть, используем его, иначе создаем базовое описание
+            if (descriptionText && descriptionText.length > 50) {
+                return descriptionText;
+            }
+            return `${service.value.name} - профессиональные услуги по подбору, оформлению и кадастровым работам с земельными участками. Полная информация об услуге, условиях и стоимости.`;
+        });
+
+        const serviceKeywords = computed(() => {
+            if (!service.value) return 'услуга, кадастр, земельные участки';
+            if (service.value.seo_keywords) return service.value.seo_keywords;
+            return `${service.value.name}, услуга, кадастр, земельные участки, оформление документов, Lagom`;
+        });
+
+        const serviceImage = computed(() => {
+            if (!service.value?.image?.url) return '';
+            return service.value.image.url;
+        });
+
+        const canonicalUrl = computed(() => {
+            if (!service.value) return '';
+            return window.location.origin + '/services/' + (service.value.slug || '');
+        });
+
+        const serviceSchema = computed(() => {
+            if (!service.value) return null;
+
+            // Схема Service
+            const schema = {
+                '@context': 'https://schema.org',
+                '@type': 'Service',
+                'name': service.value.name,
+                'description': serviceDescription.value,
+                'url': canonicalUrl.value,
+                'provider': {
+                    '@type': 'Organization',
+                    'name': 'Lagom',
+                },
+            };
+
+            // Добавляем изображение если есть
+            if (service.value.image?.url) {
+                schema.image = window.location.origin + service.value.image.url;
+            }
+
+            // Breadcrumbs schema
+            const breadcrumbSchema = {
+                '@context': 'https://schema.org',
+                '@type': 'BreadcrumbList',
+                'itemListElement': [
+                    {
+                        '@type': 'ListItem',
+                        'position': 1,
+                        'name': 'Главная',
+                        'item': window.location.origin,
+                    },
+                    {
+                        '@type': 'ListItem',
+                        'position': 2,
+                        'name': 'Услуги',
+                        'item': window.location.origin + '/services',
+                    },
+                    {
+                        '@type': 'ListItem',
+                        'position': 3,
+                        'name': service.value.name,
+                        'item': canonicalUrl.value,
+                    },
+                ],
+            };
+
+            return [schema, breadcrumbSchema];
+        });
+
         return {
             loading,
             error,
@@ -482,6 +579,13 @@ export default {
             formContainer,
             scrollToForm,
             loadingLists,
+            // SEO properties
+            serviceTitle,
+            serviceDescription,
+            serviceKeywords,
+            serviceImage,
+            canonicalUrl,
+            serviceSchema,
         };
     },
 };

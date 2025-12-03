@@ -513,6 +513,164 @@
                         </div>
                     </section>
 
+                    <!-- SEO -->
+                    <section id="seo" class="scroll-mt-4">
+                        <h2 class="text-2xl font-bold text-foreground mb-4">SEO оптимизация</h2>
+                        <div class="prose prose-sm max-w-none text-foreground space-y-4">
+                            <p>
+                                Раздел <strong>SEO настройки</strong> позволяет управлять поисковой оптимизацией сайта, 
+                                настраивать мета-теги, Open Graph, Twitter Cards и Schema.org микроразметку.
+                            </p>
+
+                            <h3 class="text-xl font-semibold mt-6 mb-3">Глобальные SEO настройки</h3>
+                            <p><strong>Как настроить SEO:</strong></p>
+                            <ol class="list-decimal pl-6 space-y-2">
+                                <li>Перейдите в раздел "Настройки" → "SEO настройки"</li>
+                                <li>Заполните основные настройки:
+                                    <ul class="list-disc pl-6 mt-2">
+                                        <li><strong>Название сайта</strong> — отображается в поисковой выдаче и браузере</li>
+                                        <li><strong>Описание сайта</strong> — краткое описание для поисковиков (рекомендуется 150-160 символов)</li>
+                                        <li><strong>Ключевые слова</strong> — основные ключевые слова через запятую</li>
+                                        <li><strong>Разрешить индексацию</strong> — включите для разрешения индексации поисковыми системами</li>
+                                    </ul>
+                                </li>
+                                <li>Настройте Open Graph (для социальных сетей):
+                                    <ul class="list-disc pl-6 mt-2">
+                                        <li><strong>Изображение по умолчанию</strong> — изображение для превью в соцсетях (рекомендуется 1200x630px)</li>
+                                        <li><strong>Тип контента OG</strong> — website, article или business</li>
+                                        <li><strong>Название сайта для OG</strong> — название для Open Graph</li>
+                                    </ul>
+                                </li>
+                                <li>Настройте Twitter Cards:
+                                    <ul class="list-disc pl-6 mt-2">
+                                        <li><strong>Тип карточки</strong> — summary или summary_large_image</li>
+                                        <li><strong>Twitter аккаунт сайта</strong> — @username вашего Twitter аккаунта</li>
+                                        <li><strong>Twitter создателя</strong> — @username создателя контента</li>
+                                    </ul>
+                                </li>
+                                <li>Заполните информацию об организации (для Schema.org):
+                                    <ul class="list-disc pl-6 mt-2">
+                                        <li><strong>Название организации</strong> — официальное название компании</li>
+                                        <li><strong>Лого организации</strong> — URL логотипа</li>
+                                        <li><strong>Телефон</strong> — контактный телефон</li>
+                                        <li><strong>Email</strong> — контактный email</li>
+                                        <li><strong>Адрес организации</strong> — физический адрес</li>
+                                    </ul>
+                                </li>
+                                <li>Настройте robots.txt (опционально):
+                                    <ul class="list-disc pl-6 mt-2">
+                                        <li>Укажите правила для поисковых роботов</li>
+                                        <li>По умолчанию закрыты разделы /admin/ и /api/</li>
+                                    </ul>
+                                </li>
+                                <li>Нажмите "Сохранить настройки"</li>
+                            </ol>
+
+                            <h3 class="text-xl font-semibold mt-6 mb-3">SEO для отдельных страниц</h3>
+                            <p>Для продуктов, услуг, кейсов и пользовательских страниц можно настроить индивидуальные SEO параметры:</p>
+                            
+                            <h4 class="text-lg font-semibold mt-4 mb-2">Продукты и Услуги</h4>
+                            <ol class="list-decimal pl-6 space-y-2">
+                                <li>При создании или редактировании продукта/услуги заполните SEO поля:
+                                    <ul class="list-disc pl-6 mt-2">
+                                        <li><strong>SEO заголовок</strong> — уникальный заголовок для поисковой выдачи (если не указан, используется название)</li>
+                                        <li><strong>SEO описание</strong> — краткое описание для сниппета в поиске (рекомендуется 150-160 символов)</li>
+                                        <li><strong>SEO ключевые слова</strong> — релевантные ключевые слова через запятую</li>
+                                    </ul>
+                                </li>
+                                <li>SEO данные автоматически используются на странице продукта/услуги</li>
+                                <li>Добавляется Schema.org микроразметка (Product/Service)</li>
+                                <li>Генерируются хлебные крошки (Breadcrumbs)</li>
+                            </ol>
+
+                            <h4 class="text-lg font-semibold mt-4 mb-2">Кейсы</h4>
+                            <ol class="list-decimal pl-6 space-y-2">
+                                <li>При создании или редактировании кейса заполните SEO поля аналогично продуктам</li>
+                                <li>Для кейсов используется Schema.org тип "Article"</li>
+                                <li>Автоматически добавляются даты публикации и обновления</li>
+                                <li>Изображения кейса включаются в микроразметку</li>
+                            </ol>
+
+                            <h4 class="text-lg font-semibold mt-4 mb-2">Пользовательские страницы</h4>
+                            <ol class="list-decimal pl-6 space-y-2">
+                                <li>Перейдите в раздел "Страницы" → "Список страниц"</li>
+                                <li>Создайте или отредактируйте страницу</li>
+                                <li>Заполните SEO поля:
+                                    <ul class="list-disc pl-6 mt-2">
+                                        <li><strong>SEO заголовок</strong> — заголовок для поисковой выдачи</li>
+                                        <li><strong>SEO описание</strong> — описание для сниппета</li>
+                                        <li><strong>SEO ключевые слова</strong> — ключевые слова</li>
+                                    </ul>
+                                </li>
+                                <li>Укажите уникальный URL (slug) для страницы</li>
+                                <li>Сохраните страницу</li>
+                            </ol>
+
+                            <h3 class="text-xl font-semibold mt-6 mb-3">Автоматические SEO инструменты</h3>
+                            <div class="bg-muted/50 p-4 rounded-lg space-y-3">
+                                <div>
+                                    <strong>Robots.txt</strong>
+                                    <p class="text-sm mt-1">
+                                        Автоматически генерируется на основе настроек. Доступен по адресу: 
+                                        <code>/robots.txt</code>
+                                    </p>
+                                </div>
+                                <div>
+                                    <strong>Sitemap.xml</strong>
+                                    <p class="text-sm mt-1">
+                                        Автоматически генерируется со всеми страницами сайта. Включает:
+                                        главную страницу, статические страницы, продукты, услуги, кейсы и пользовательские страницы.
+                                        Доступен по адресу: <code>/sitemap.xml</code>
+                                    </p>
+                                </div>
+                                <div>
+                                    <strong>Canonical URL</strong>
+                                    <p class="text-sm mt-1">
+                                        Автоматически добавляется на всех страницах для предотвращения дублей контента.
+                                    </p>
+                                </div>
+                                <div>
+                                    <strong>Schema.org микроразметка</strong>
+                                    <p class="text-sm mt-1">
+                                        Автоматически добавляется на всех страницах в формате JSON-LD. 
+                                        Типы разметки: Organization, WebSite, Product, Service, Article, BreadcrumbList.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <h3 class="text-xl font-semibold mt-6 mb-3">Рекомендации по SEO</h3>
+                            <ul class="list-disc pl-6 space-y-2">
+                                <li>Используйте уникальные заголовки и описания для каждой страницы</li>
+                                <li>Описание должно быть информативным и привлекательным (150-160 символов)</li>
+                                <li>Включайте ключевые слова естественным образом в заголовки и описания</li>
+                                <li>Загружайте изображения для Open Graph размером 1200x630px</li>
+                                <li>Регулярно обновляйте sitemap.xml в Google Search Console и Яндекс.Вебмастер</li>
+                                <li>Проверяйте микроразметку с помощью валидаторов:
+                                    <ul class="list-disc pl-6 mt-2">
+                                        <li><a href="https://search.google.com/test/rich-results" target="_blank" class="text-accent hover:underline">Google Rich Results Test</a></li>
+                                        <li><a href="https://validator.schema.org/" target="_blank" class="text-accent hover:underline">Schema.org Validator</a></li>
+                                    </ul>
+                                </li>
+                                <li>Проверяйте превью в соцсетях:
+                                    <ul class="list-disc pl-6 mt-2">
+                                        <li><a href="https://developers.facebook.com/tools/debug/" target="_blank" class="text-accent hover:underline">Facebook Sharing Debugger</a></li>
+                                        <li><a href="https://cards-dev.twitter.com/validator" target="_blank" class="text-accent hover:underline">Twitter Card Validator</a></li>
+                                    </ul>
+                                </li>
+                            </ul>
+
+                            <h3 class="text-xl font-semibold mt-6 mb-3">Проверка индексации</h3>
+                            <p>После настройки SEO рекомендуется:</p>
+                            <ol class="list-decimal pl-6 space-y-2">
+                                <li>Добавить сайт в <a href="https://search.google.com/search-console" target="_blank" class="text-accent hover:underline">Google Search Console</a></li>
+                                <li>Добавить сайт в <a href="https://webmaster.yandex.ru/" target="_blank" class="text-accent hover:underline">Яндекс.Вебмастер</a></li>
+                                <li>Отправить sitemap.xml в обе системы</li>
+                                <li>Регулярно проверять статус индексации</li>
+                                <li>Отслеживать позиции в поисковой выдаче</li>
+                            </ol>
+                        </div>
+                    </section>
+
                     <!-- Tips -->
                     <section id="tips" class="scroll-mt-4">
                         <h2 class="text-2xl font-bold text-foreground mb-4">Полезные советы</h2>
@@ -553,6 +711,7 @@ export default {
             { id: 'banners', title: 'Баннеры' },
             { id: 'decisions', title: 'Решения' },
             { id: 'quizzes', title: 'Квизы' },
+            { id: 'seo', title: 'SEO оптимизация' },
             { id: 'tips', title: 'Полезные советы' },
         ]);
 

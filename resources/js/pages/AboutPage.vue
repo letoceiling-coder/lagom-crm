@@ -1,5 +1,13 @@
 <template>
     <div class="about-page min-h-screen bg-background">
+        <SEOHead
+            title="О компании Lagom - Профессиональные услуги по работе с земельными участками"
+            description="Lagom - ведущая компания по подбору и оформлению земельных участков. Узнайте о нашей команде, опыте работы и подходе к решению задач клиентов. Более 10 лет на рынке недвижимости."
+            keywords="о компании, команда, услуги, земельные участки, опыт работы, профессионалы, недвижимость"
+            :canonical="canonicalUrl"
+            :schema="aboutSchema"
+        />
+        
         <div class="w-full px-3 sm:px-4 md:px-5">
             <div class="w-full max-w-[1200px] mx-auto">
                 <!-- Хлебные крошки -->
@@ -209,7 +217,8 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import SEOHead from '../components/SEOHead.vue';
 import ProductCard from '../components/public/ProductCard.vue';
 import HowWork from '../components/public/HowWork.vue';
 import Faq from '../components/public/Faq.vue';
@@ -218,6 +227,7 @@ import FeedbackForm from '../components/public/FeedbackForm.vue';
 export default {
     name: 'AboutPage',
     components: {
+        SEOHead,
         ProductCard,
         HowWork,
         Faq,
@@ -334,6 +344,21 @@ export default {
             });
         });
 
+        // SEO data
+        const canonicalUrl = computed(() => {
+            return window.location.origin + '/about';
+        });
+
+        const aboutSchema = computed(() => {
+            return {
+                '@context': 'https://schema.org',
+                '@type': 'AboutPage',
+                'name': 'О компании',
+                'description': 'Узнайте о нашей компании, команде и подходе к работе',
+                'url': canonicalUrl.value,
+            };
+        });
+
         return {
             loading,
             bannerImage,
@@ -345,6 +370,8 @@ export default {
             clients,
             team,
             benefits,
+            canonicalUrl,
+            aboutSchema,
         };
     },
 };

@@ -1,5 +1,15 @@
 <template>
     <div class="case-page min-h-screen bg-white">
+        <SEOHead
+            v-if="caseItem"
+            :title="caseTitle"
+            :description="caseMetaDescription"
+            :keywords="caseKeywords"
+            :og-image="caseImage"
+            :canonical="canonicalUrl"
+            :schema="caseSchema"
+        />
+        
         <div class="w-full px-3 sm:px-4 md:px-5">
             <div class="w-full max-w-[1200px] mx-auto">
                 <!-- Skeleton Loader -->
@@ -192,6 +202,7 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import SEOHead from '../components/SEOHead.vue';
 import LazyImage from '../components/public/LazyImage.vue';
 import CaseImageCarousel from '../components/public/CaseImageCarousel.vue';
 import SimilarCases from '../components/public/SimilarCases.vue';
@@ -200,6 +211,7 @@ import FeedbackForm from '../components/public/FeedbackForm.vue';
 export default {
     name: 'CasePage',
     components: {
+        SEOHead,
         LazyImage,
         CaseImageCarousel,
         SimilarCases,
@@ -412,6 +424,111 @@ export default {
             fetchCase();
         });
 
+        // SEO computed properties
+        const caseTitle = computed(() => {
+            if (!caseItem.value) return 'Кейс - Lagom';
+            if (caseItem.value.seo_title) return caseItem.value.seo_title;
+            return `${caseItem.value.name} - Lagom | Пример реализованного проекта`;
+        });
+
+        const caseMetaDescription = computed(() => {
+            if (!caseItem.value) return 'Пример успешно реализованного проекта по подбору и оформлению земельного участка.';
+            if (caseItem.value.seo_description) return caseItem.value.seo_description;
+            const desc = caseDescription.value;
+            // Если описание есть, используем его, иначе создаем базовое описание
+            if (desc && desc.length > 50) {
+                return desc;
+            }
+            return `Кейс: ${caseItem.value.name} - успешно реализованный проект по подбору и оформлению земельного участка. Подробная информация о проекте, результатах и особенностях реализации.`;
+        });
+
+        const caseKeywords = computed(() => {
+            if (!caseItem.value) return 'кейс, проект, земельные участки';
+            if (caseItem.value.seo_keywords) return caseItem.value.seo_keywords;
+            return `${caseItem.value.name}, кейс, проект, пример работ, земельные участки, объект, Lagom`;
+        });
+
+        const caseImage = computed(() => {
+            if (!caseItem.value) return '';
+            // Используем первое изображение из героя или основное изображение
+            if (heroImages.value && heroImages.value.length > 0) {
+                const firstImage = heroImages.value[0];
+                return firstImage.url || firstImage.webp || '';
+            }
+            if (caseItem.value.image?.url) {
+                return caseItem.value.image.url;
+            }
+            return '';
+        });
+
+        const canonicalUrl = computed(() => {
+            if (!caseItem.value) return '';
+            return window.location.origin + '/cases/' + (caseItem.value.slug || '');
+        });
+
+        const caseSchema = computed(() => {
+            if (!caseItem.value) return null;
+
+            // Схема Article для кейса
+            const schema = {
+                '@context': 'https://schema.org',
+                '@type': 'Article',
+                'headline': caseItem.value.name,
+                'description': caseMetaDescription.value,
+                'url': canonicalUrl.value,
+                'author': {
+                    '@type': 'Organization',
+                    'name': 'Lagom',
+                },
+            };
+
+            // Добавляем дату публикации
+            if (caseItem.value.published || caseItem.value.created_at) {
+                schema.datePublished = caseItem.value.created_at;
+                schema.dateModified = caseItem.value.updated_at || caseItem.value.created_at;
+            }
+
+            // Добавляем изображения
+            if (caseItem.value.images && caseItem.value.images.length > 0) {
+                const imageUrls = caseItem.value.images
+                    .filter(img => img.url || img.webp)
+                    .map(img => window.location.origin + (img.url || img.webp));
+                if (imageUrls.length > 0) {
+                    schema.image = imageUrls;
+                }
+            } else if (caseItem.value.image?.url) {
+                schema.image = window.location.origin + caseItem.value.image.url;
+            }
+
+            // Breadcrumbs schema
+            const breadcrumbSchema = {
+                '@context': 'https://schema.org',
+                '@type': 'BreadcrumbList',
+                'itemListElement': [
+                    {
+                        '@type': 'ListItem',
+                        'position': 1,
+                        'name': 'Главная',
+                        'item': window.location.origin,
+                    },
+                    {
+                        '@type': 'ListItem',
+                        'position': 2,
+                        'name': 'Кейсы и объекты',
+                        'item': window.location.origin + '/cases',
+                    },
+                    {
+                        '@type': 'ListItem',
+                        'position': 3,
+                        'name': caseItem.value.name,
+                        'item': canonicalUrl.value,
+                    },
+                ],
+            };
+
+            return [schema, breadcrumbSchema];
+        });
+
         return {
             loading,
             error,
@@ -422,6 +539,13 @@ export default {
             formatDate,
             handleImageError,
             handleShare,
+            // SEO properties
+            caseTitle,
+            caseMetaDescription,
+            caseKeywords,
+            caseImage,
+            canonicalUrl,
+            caseSchema,
         };
     },
 };

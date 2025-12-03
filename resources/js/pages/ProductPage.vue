@@ -1,5 +1,15 @@
 <template>
     <div class="product-page min-h-screen bg-background">
+        <SEOHead
+            v-if="product"
+            :title="productTitle"
+            :description="productDescription"
+            :keywords="productKeywords"
+            :og-image="productImage"
+            :canonical="canonicalUrl"
+            :schema="productSchema"
+        />
+        
         <div class="w-full px-3 sm:px-4 md:px-5">
             <div class="w-full max-w-[1200px] mx-auto">
             <!-- Skeleton Loader -->
@@ -207,6 +217,8 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import SEOHead from '../components/SEOHead.vue';
+import { usePreloader } from '../composables/usePreloader';
 import DecisionCard from '../components/public/DecisionCard.vue';
 import ProductCard from '../components/public/ProductCard.vue';
 import LazyImage from '../components/public/LazyImage.vue';
@@ -220,6 +232,7 @@ import SuccessStage from '../components/public/product/SuccessStage.vue';
 export default {
     name: 'ProductPage',
     components: {
+        SEOHead,
         DecisionCard,
         ProductCard,
         LazyImage,
@@ -232,6 +245,7 @@ export default {
     setup() {
         const route = useRoute();
         const { getCachedProduct, setCachedProduct, clearProductCache } = useProductCache();
+        const { hidePreloader } = usePreloader();
         
         const loading = ref(false);
         const error = ref(null);
@@ -501,6 +515,8 @@ export default {
                 }
             } finally {
                 loading.value = false;
+                // Скрываем прелоадер после загрузки контента
+                hidePreloader();
             }
         };
 
@@ -592,6 +608,97 @@ export default {
             }
         });
 
+        // SEO computed properties
+        const productTitle = computed(() => {
+            if (!product.value) return 'Продукт - Lagom';
+            if (product.value.seo_title) return product.value.seo_title;
+            return `${product.value.name} - Lagom | Продукты и услуги`;
+        });
+
+        const productDescription = computed(() => {
+            if (!product.value) return 'Подробная информация о продукте. Профессиональные услуги по работе с земельными участками.';
+            if (product.value.seo_description) return product.value.seo_description;
+            const desc = product.value.description;
+            const descriptionText = typeof desc === 'string' ? desc : desc?.ru || '';
+            // Если описание есть, используем его, иначе создаем базовое описание
+            if (descriptionText && descriptionText.length > 50) {
+                return descriptionText;
+            }
+            return `${product.value.name} - профессиональные услуги по подбору и оформлению земельных участков. Полная информация о продукте, условиях и преимуществах.`;
+        });
+
+        const productKeywords = computed(() => {
+            if (!product.value) return 'продукт, услуги, земельные участки';
+            if (product.value.seo_keywords) return product.value.seo_keywords;
+            return `${product.value.name}, продукт, услуги, земельные участки, недвижимость, Lagom`;
+        });
+
+        const productImage = computed(() => {
+            if (!product.value?.image?.url) return '';
+            return product.value.image.url;
+        });
+
+        const canonicalUrl = computed(() => {
+            if (!product.value) return '';
+            return window.location.origin + '/products/' + (product.value.slug || '');
+        });
+
+        const productSchema = computed(() => {
+            if (!product.value) return null;
+
+            // Базовая схема Product
+            const schema = {
+                '@context': 'https://schema.org',
+                '@type': 'Product',
+                'name': product.value.name,
+                'description': productDescription.value,
+                'url': canonicalUrl.value,
+            };
+
+            // Добавляем изображение если есть
+            if (product.value.image?.url) {
+                schema.image = window.location.origin + product.value.image.url;
+            }
+
+            // Добавляем услуги как offers
+            if (product.value.services && product.value.services.length > 0) {
+                schema.offers = {
+                    '@type': 'AggregateOffer',
+                    'priceCurrency': 'RUB',
+                    'availability': 'https://schema.org/InStock',
+                    'offerCount': product.value.services.length,
+                };
+            }
+
+            // Добавляем breadcrumbs
+            const breadcrumbSchema = {
+                '@context': 'https://schema.org',
+                '@type': 'BreadcrumbList',
+                'itemListElement': [
+                    {
+                        '@type': 'ListItem',
+                        'position': 1,
+                        'name': 'Главная',
+                        'item': window.location.origin,
+                    },
+                    {
+                        '@type': 'ListItem',
+                        'position': 2,
+                        'name': 'Продукты',
+                        'item': window.location.origin + '/products',
+                    },
+                    {
+                        '@type': 'ListItem',
+                        'position': 3,
+                        'name': product.value.name,
+                        'item': canonicalUrl.value,
+                    },
+                ],
+            };
+
+            return [schema, breadcrumbSchema];
+        });
+
         return {
             loading,
             error,
@@ -613,6 +720,13 @@ export default {
             formContainer,
             scrollToForm,
             loadingLists,
+            // SEO properties
+            productTitle,
+            productDescription,
+            productKeywords,
+            productImage,
+            canonicalUrl,
+            productSchema,
         };
         },
     };

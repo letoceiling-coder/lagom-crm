@@ -1,5 +1,13 @@
 <template>
     <div class="cases-page min-h-screen bg-white">
+        <SEOHead
+            title="Кейсы и объекты - Lagom | Примеры реализованных проектов"
+            description="Портфолио успешно реализованных проектов по подбору и оформлению земельных участков. Реальные кейсы складов, производств, придорожного сервиса и других объектов."
+            keywords="кейсы, проекты, примеры работ, объекты, портфолио, реализованные проекты, земельные участки"
+            :canonical="canonicalUrl"
+            :schema="casesSchema"
+        />
+        
         <div class="w-full px-3 sm:px-4 md:px-5">
             <div class="w-full max-w-[1200px] mx-auto py-8 md:py-12">
                 <!-- Заголовок и фильтры -->
@@ -91,12 +99,14 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue';
+import SEOHead from '../components/SEOHead.vue';
 import CaseCard from '../components/public/CaseCard.vue';
 import CaseFiltersModal from '../components/public/CaseFiltersModal.vue';
 
 export default {
     name: 'CasesPage',
     components: {
+        SEOHead,
         CaseCard,
         CaseFiltersModal,
     },
@@ -208,6 +218,21 @@ export default {
             fetchCases();
         });
 
+        // SEO data
+        const canonicalUrl = computed(() => {
+            return window.location.origin + '/cases';
+        });
+
+        const casesSchema = computed(() => {
+            return {
+                '@context': 'https://schema.org',
+                '@type': 'CollectionPage',
+                'name': 'Наши кейсы',
+                'description': 'Примеры успешно реализованных проектов по подбору и оформлению земельных участков',
+                'url': canonicalUrl.value,
+            };
+        });
+
         return {
             loading,
             error,
@@ -219,6 +244,8 @@ export default {
             getPageNumbers,
             isPageActive,
             goToPage,
+            canonicalUrl,
+            casesSchema,
         };
     },
 };

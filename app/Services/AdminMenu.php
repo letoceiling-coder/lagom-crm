@@ -91,9 +91,22 @@ class AdminMenu
             ],
             [
                 'title' => 'Настройки',
-                'route' => 'admin.settings',
                 'icon' => 'settings',
-                'roles' => ['admin'],
+                'roles' => ['admin', 'manager'],
+                'children' => [
+                    [
+                        'title' => 'SEO настройки',
+                        'route' => 'admin.seo-settings',
+                        'icon' => 'search',
+                        'roles' => ['admin', 'manager'],
+                    ],
+                    [
+                        'title' => 'Настройки сайта',
+                        'route' => 'admin.settings',
+                        'icon' => 'settings',
+                        'roles' => ['admin'],
+                    ],
+                ],
             ],
             [
                 'title' => 'Меню',
@@ -187,6 +200,12 @@ class AdminMenu
                 'icon' => 'file-text',
                 'roles' => ['admin', 'manager'],
                 'children' => [
+                    [
+                        'title' => 'Список страниц',
+                        'route' => 'admin.pages',
+                        'icon' => 'file-text',
+                        'roles' => ['admin', 'manager'],
+                    ],
                     [
                         'title' => 'Главная страница',
                         'route' => 'admin.pages.home',

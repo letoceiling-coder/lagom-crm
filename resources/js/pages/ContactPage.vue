@@ -1,5 +1,13 @@
 <template>
     <div class="contact-page min-h-screen bg-background pb-12 md:pb-20">
+        <SEOHead
+            title="Контакты - Lagom | Свяжитесь с нами"
+            description="Контактная информация компании Lagom. Свяжитесь с нами для получения консультации по подбору и оформлению земельных участков. Адреса, телефоны, email, время работы. Бесплатная консультация."
+            keywords="контакты, адрес, телефон, связаться, email, время работы, консультация, Lagom"
+            :canonical="canonicalUrl"
+            :schema="contactSchema"
+        />
+        
         <div class="w-full px-3 sm:px-4 md:px-5">
             <div class="w-full max-w-[1200px] mx-auto">
                 <!-- Хлебные крошки -->
@@ -93,12 +101,14 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import SEOHead from '../components/SEOHead.vue';
 import FeedbackForm from '../components/public/FeedbackForm.vue';
 
 export default {
     name: 'ContactPage',
     components: {
+        SEOHead,
         FeedbackForm,
     },
     setup() {
@@ -190,11 +200,28 @@ export default {
             fetchContactSettings();
         });
 
+        // SEO data
+        const canonicalUrl = computed(() => {
+            return window.location.origin + '/contacts';
+        });
+
+        const contactSchema = computed(() => {
+            return {
+                '@context': 'https://schema.org',
+                '@type': 'ContactPage',
+                'name': 'Контакты',
+                'description': 'Свяжитесь с нами для получения консультации',
+                'url': canonicalUrl.value,
+            };
+        });
+
         return {
             loading,
             contactItems,
             socialItems,
             getSocialIcon,
+            canonicalUrl,
+            contactSchema,
         };
     },
 };

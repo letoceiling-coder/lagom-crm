@@ -1,5 +1,15 @@
 <template>
     <div class="home-page">
+        <SEOHead
+            :title="seoTitle"
+            :description="seoDescription"
+            :keywords="seoKeywords"
+            :og-image="seoSettings.default_og_image"
+            :og-type="seoSettings.og_type || 'website'"
+            :canonical="canonicalUrl"
+            :schema="combinedSchema"
+        />
+        
         <component
             v-for="(block, index) in orderedBlocks"
             :key="block.key"
@@ -11,6 +21,8 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue';
+import SEOHead from '../components/SEOHead.vue';
+import { usePreloader } from '../composables/usePreloader';
 import HeroBanner from '../components/public/HeroBanner.vue';
 import HowWork from '../components/public/HowWork.vue';
 import Decisions from '../components/public/Decisions.vue';
@@ -34,9 +46,29 @@ const componentMap = {
 
 export default {
     name: 'Home',
+    components: {
+        SEOHead,
+    },
     setup() {
+        console.log('[SEO DEBUG] Home.setup: начало setup');
+        console.log('[SEO DEBUG] Home.setup: текущий title при setup:', document.title);
+        
+        const { hidePreloader } = usePreloader();
         const blocks = ref([]);
         const loading = ref(true);
+        // Инициализируем seoSettings с дефолтными значениями сразу
+        // Это предотвращает мерцание title/description при загрузке
+        const defaultSeoSettings = {
+            site_name: 'Lagom - Профессиональные услуги по работе с земельными участками',
+            site_description: 'Профессиональные услуги по подбору и оформлению земельных участков. Кадастровые работы, консультации, оформление документов.',
+            site_keywords: 'земельные участки, кадастр, оформление документов, недвижимость, Lagom',
+            default_og_image: '',
+            og_type: 'website',
+        };
+        
+        const seoSettings = ref(defaultSeoSettings);
+        console.log('[SEO DEBUG] Home.setup: seoSettings инициализирован:', seoSettings.value);
+        console.log('[SEO DEBUG] Home.setup: title после инициализации:', document.title);
 
         const orderedBlocks = computed(() => {
             return blocks.value
@@ -81,17 +113,154 @@ export default {
                 ];
             } finally {
                 loading.value = false;
+                // Скрываем прелоадер после загрузки контента
+                hidePreloader();
+            }
+        };
+
+        const canonicalUrl = computed(() => {
+            return window.location.origin + '/';
+        });
+
+        const combinedSchema = computed(() => {
+            const schemas = [];
+            
+            // Website Schema - создаем дефолтную, если нет из настроек
+            const websiteSchema = seoSettings.value.website_schema || {
+                '@context': 'https://schema.org',
+                '@type': 'WebSite',
+                'name': seoSettings.value.site_name || 'Lagom',
+                'description': seoSettings.value.site_description || 'Профессиональные услуги по подбору и оформлению земельных участков',
+                'url': window.location.origin,
+            };
+            schemas.push(websiteSchema);
+            
+            // Organization Schema - создаем дефолтную, если нет из настроек
+            const organizationSchema = seoSettings.value.organization_schema || {
+                '@context': 'https://schema.org',
+                '@type': 'Organization',
+                'name': seoSettings.value.site_name || 'Lagom',
+                'url': window.location.origin,
+            };
+            schemas.push(organizationSchema);
+
+            return schemas;
+        });
+
+        const fetchSeoSettings = async () => {
+            console.log('[SEO DEBUG] Home.fetchSeoSettings: начало загрузки SEO настроек');
+            console.log('[SEO DEBUG] Home.fetchSeoSettings: текущий title до запроса:', document.title);
+            console.log('[SEO DEBUG] Home.fetchSeoSettings: текущие seoSettings:', seoSettings.value);
+            
+            try {
+                const response = await fetch('/api/public/seo-settings');
+                console.log('[SEO DEBUG] Home.fetchSeoSettings: ответ получен, status:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('[SEO DEBUG] Home.fetchSeoSettings: данные получены:', data.data);
+                    
+                    if (data.data) {
+                        // Проверяем, что site_name не пустой и не равен 'Laravel' (дефолтное значение Laravel)
+                        const isValidSiteName = data.data.site_name && 
+                                                data.data.site_name.trim() !== '' && 
+                                                data.data.site_name !== 'Laravel' &&
+                                                data.data.site_name.toLowerCase() !== 'laravel';
+                        
+                        // Проверяем, что site_description не пустой
+                        const isValidDescription = data.data.site_description && 
+                                                   data.data.site_description.trim() !== '';
+                        
+                        console.log('[SEO DEBUG] Home.fetchSeoSettings: isValidSiteName:', isValidSiteName, 'site_name:', data.data.site_name);
+                        console.log('[SEO DEBUG] Home.fetchSeoSettings: isValidDescription:', isValidDescription);
+                        
+                        // Объединяем загруженные данные с дефолтными, но используем дефолтные значения
+                        // если API вернул пустые или некорректные данные
+                        const newSeoSettings = {
+                            ...defaultSeoSettings,
+                            ...data.data,
+                            // Используем данные из API только если они валидны, иначе используем дефолтные
+                            site_name: isValidSiteName ? data.data.site_name : defaultSeoSettings.site_name,
+                            site_description: isValidDescription ? data.data.site_description : defaultSeoSettings.site_description,
+                            site_keywords: (data.data.site_keywords && data.data.site_keywords.trim() !== '') 
+                                ? data.data.site_keywords 
+                                : defaultSeoSettings.site_keywords,
+                        };
+                        
+                        console.log('[SEO DEBUG] Home.fetchSeoSettings: новые seoSettings:', newSeoSettings);
+                        console.log('[SEO DEBUG] Home.fetchSeoSettings: title до обновления seoSettings:', document.title);
+                        
+                        seoSettings.value = newSeoSettings;
+                        
+                        console.log('[SEO DEBUG] Home.fetchSeoSettings: seoSettings обновлен');
+                        console.log('[SEO DEBUG] Home.fetchSeoSettings: title после обновления seoSettings:', document.title);
+                    }
+                }
+            } catch (error) {
+                console.error('[SEO DEBUG] Home.fetchSeoSettings: ошибка загрузки:', error);
+                // Значения по умолчанию уже установлены при инициализации
+                // Не сбрасываем их, чтобы избежать мерцания title/description
             }
         };
 
         onMounted(() => {
+            console.log('[SEO DEBUG] Home.onMounted: компонент смонтирован');
+            console.log('[SEO DEBUG] Home.onMounted: текущий title:', document.title);
+            console.log('[SEO DEBUG] Home.onMounted: текущие seoSettings:', seoSettings.value);
+            
+            fetchSeoSettings();
             fetchBlocks();
+            
+            console.log('[SEO DEBUG] Home.onMounted: запросы отправлены');
+        });
+
+        // Computed свойства для SEO с защитой от некорректных значений
+        const seoTitle = computed(() => {
+            const title = seoSettings.value.site_name;
+            console.log('[SEO DEBUG] Home.seoTitle computed: исходное значение:', title);
+            // Проверяем, что title валидный
+            if (!title || title.trim() === '' || title === 'Laravel' || title.toLowerCase() === 'laravel') {
+                console.log('[SEO DEBUG] Home.seoTitle computed: используем дефолтное значение:', defaultSeoSettings.site_name);
+                return defaultSeoSettings.site_name;
+            }
+            console.log('[SEO DEBUG] Home.seoTitle computed: используем значение из seoSettings:', title);
+            return title;
+        });
+        
+        const seoDescription = computed(() => {
+            const desc = seoSettings.value.site_description;
+            console.log('[SEO DEBUG] Home.seoDescription computed: исходное значение:', desc);
+            // Проверяем, что description валидный
+            if (!desc || desc.trim() === '') {
+                console.log('[SEO DEBUG] Home.seoDescription computed: используем дефолтное значение:', defaultSeoSettings.site_description);
+                return defaultSeoSettings.site_description;
+            }
+            console.log('[SEO DEBUG] Home.seoDescription computed: используем значение из seoSettings:', desc);
+            return desc;
+        });
+        
+        const seoKeywords = computed(() => {
+            const keywords = seoSettings.value.site_keywords;
+            console.log('[SEO DEBUG] Home.seoKeywords computed: исходное значение:', keywords);
+            // Проверяем, что keywords валидные
+            if (!keywords || keywords.trim() === '') {
+                console.log('[SEO DEBUG] Home.seoKeywords computed: используем дефолтное значение:', defaultSeoSettings.site_keywords);
+                return defaultSeoSettings.site_keywords;
+            }
+            console.log('[SEO DEBUG] Home.seoKeywords computed: используем значение из seoSettings:', keywords);
+            return keywords;
         });
 
         return {
             blocks,
             loading,
             orderedBlocks,
+            seoSettings,
+            seoTitle,
+            seoDescription,
+            seoKeywords,
+            canonicalUrl,
+            combinedSchema,
         };
     },
 };

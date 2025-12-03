@@ -1,5 +1,13 @@
 <template>
     <div class="products-page min-h-screen bg-background">
+        <SEOHead
+            title="Продукты и услуги - Lagom | Каталог земельных участков"
+            description="Полный каталог продуктов и услуг по подбору, оформлению и работе с земельными участками. Профессиональные решения для складов, производства, придорожного сервиса и недвижимости."
+            keywords="продукты, услуги, земельные участки, недвижимость, кадастр, оформление земли, подбор участка"
+            :canonical="canonicalUrl"
+            :schema="breadcrumbSchema"
+        />
+        
         <div class="w-full px-3 sm:px-4 md:px-5">
             <div class="w-full max-w-[1200px] mx-auto">
                 <!-- Хлебные крошки -->
@@ -82,15 +90,17 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import ProductCard from '../components/public/ProductCard.vue';
 import FeedbackForm from '../components/public/FeedbackForm.vue';
+import SEOHead from '../components/SEOHead.vue';
 
 export default {
     name: 'ProductsPage',
     components: {
         ProductCard,
         FeedbackForm,
+        SEOHead,
     },
     setup() {
         const loadingProducts = ref(false);
@@ -159,12 +169,34 @@ export default {
             ]);
         });
 
+        const canonicalUrl = computed(() => window.location.origin + '/products');
+        const breadcrumbSchema = computed(() => ({
+            '@context': 'https://schema.org',
+            '@type': 'BreadcrumbList',
+            'itemListElement': [
+                {
+                    '@type': 'ListItem',
+                    'position': 1,
+                    'name': 'Главная',
+                    'item': window.location.origin,
+                },
+                {
+                    '@type': 'ListItem',
+                    'position': 2,
+                    'name': 'Продукты',
+                    'item': window.location.origin + '/products',
+                },
+            ],
+        }));
+
         return {
             loadingProducts,
             loadingServices,
             error,
             products,
             services,
+            canonicalUrl,
+            breadcrumbSchema,
         };
     },
 };

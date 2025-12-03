@@ -206,6 +206,20 @@ const routes = [
                 name: 'case',
                 component: () => import('./pages/CasePage.vue'),
             },
+            {
+                path: ':slug',
+                name: 'page',
+                component: () => import('./pages/Page.vue'),
+                beforeEnter: (to, from, next) => {
+                    // Исключаем зарезервированные пути
+                    const reservedPaths = ['admin', 'login', 'register', 'forgot-password', 'reset-password', '403', '404', '500'];
+                    if (reservedPaths.includes(to.params.slug)) {
+                        next('/404');
+                    } else {
+                        next();
+                    }
+                },
+            },
         ],
     },
     {
@@ -542,9 +556,33 @@ const routes = [
                 meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
             },
             {
+                path: 'pages',
+                name: 'admin.pages',
+                component: () => import('./pages/admin/pages/Pages.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
+            },
+            {
+                path: 'pages/create',
+                name: 'admin.pages.create',
+                component: () => import('./pages/admin/pages/PageEdit.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
+            },
+            {
+                path: 'pages/:id/edit',
+                name: 'admin.pages.edit',
+                component: () => import('./pages/admin/pages/PageEdit.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
+            },
+            {
                 path: 'pages/home',
                 name: 'admin.pages.home',
                 component: () => import('./pages/admin/pages/HomePage.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
+            },
+            {
+                path: 'seo-settings',
+                name: 'admin.seo-settings',
+                component: () => import('./pages/admin/SeoSettings.vue'),
                 meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
             },
         ],
@@ -602,28 +640,128 @@ const router = createRouter({
 });
 
 // Navigation guard
-router.beforeEach((to, from, next) => {
-    const isAuthenticated = store.getters.isAuthenticated;
-    
-    if (to.meta.requiresAuth && !isAuthenticated) {
-        next('/login');
-    } else if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
-        next('/admin');
-    } else if (to.meta.requiresRole) {
-        // Проверка ролей
-        const requiredRoles = Array.isArray(to.meta.requiresRole) 
-            ? to.meta.requiresRole 
-            : [to.meta.requiresRole];
+router.beforeEach(async (to, from, next) => {
+    try {
+        const isAuthenticated = store.getters.isAuthenticated;
         
-        if (!store.getters.hasAnyRole(requiredRoles)) {
-            // Пользователь не имеет нужной роли - перенаправляем на 403
-            next('/403');
-        } else {
-            next();
+        if (to.meta.requiresAuth && !isAuthenticated) {
+            next('/login');
+            return;
         }
-    } else {
+        
+        if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
+            next('/admin');
+            return;
+        }
+        
+        if (to.meta.requiresRole) {
+            // Проверка ролей
+            const requiredRoles = Array.isArray(to.meta.requiresRole) 
+                ? to.meta.requiresRole 
+                : [to.meta.requiresRole];
+            
+            // Проверяем, инициализирован ли store
+            if (store.getters.hasAnyRole && typeof store.getters.hasAnyRole === 'function') {
+                if (!store.getters.hasAnyRole(requiredRoles)) {
+                    // Пользователь не имеет нужной роли - перенаправляем на 403
+                    next('/403');
+                    return;
+                }
+            } else {
+                // Если store еще не инициализирован, разрешаем доступ (проверка будет на уровне компонента)
+                console.warn('Store not fully initialized, allowing route access');
+            }
+        }
+        
+        next();
+    } catch (error) {
+        console.error('Navigation guard error:', error);
+        // Если ошибка при проверке маршрута, пробуем продолжить
         next();
     }
+});
+
+// Обработка ошибок при загрузке компонентов маршрута
+let errorRedirectCount = 0;
+const MAX_ERROR_REDIRECTS = 2;
+let lastErrorPath = null;
+
+router.onError((error, to) => {
+    console.error('Router component loading error:', error, 'Route:', to);
+    
+    // Если это та же ошибка, что и раньше, не перенаправляем снова
+    if (to && to.path === lastErrorPath) {
+        console.error('Same error path detected. Preventing redirect loop.');
+        errorRedirectCount = 0;
+        lastErrorPath = null;
+        return;
+    }
+    
+    // Предотвращаем бесконечный цикл
+    if (errorRedirectCount >= MAX_ERROR_REDIRECTS) {
+        console.error('Max error redirects reached. Stopping redirect loop.');
+        errorRedirectCount = 0;
+        lastErrorPath = null;
+        return;
+    }
+    
+    // Если ошибка при загрузке самого компонента 404, не перенаправляем
+    if (to && (to.path === '/404' || to.name === 'error.404' || to.name === 'not-found')) {
+        console.error('Error loading 404 component. Cannot redirect to 404.');
+        errorRedirectCount = 0;
+        lastErrorPath = null;
+        return;
+    }
+    
+    // Если ошибка при загрузке главной страницы или публичных маршрутов, не перенаправляем на 404
+    if (to && (to.path === '/' || to.name === 'home' || to.path === '')) {
+        console.error('Error loading home page. Cannot redirect to 404.');
+        errorRedirectCount = 0;
+        lastErrorPath = null;
+        return;
+    }
+    
+    // Если ошибка при загрузке админского маршрута, пробуем загрузить снова
+    if (to && to.path && to.path.startsWith('/admin')) {
+        // Для админских маршрутов не прерываем навигацию
+        return;
+    }
+    
+    // Если ошибка при загрузке публичных маршрутов (products, services, cases и т.д.), не перенаправляем
+    const publicRoutes = ['/products', '/services', '/cases', '/about', '/contacts'];
+    if (to && to.path && publicRoutes.some(route => to.path.startsWith(route))) {
+        console.error('Error loading public route. Not redirecting to 404.');
+        errorRedirectCount = 0;
+        lastErrorPath = null;
+        return;
+    }
+    
+    // Для других маршрутов перенаправляем на 404 только если это не критическая ошибка
+    lastErrorPath = to?.path || null;
+    errorRedirectCount++;
+    
+    // Используем setTimeout для предотвращения немедленного повторного вызова
+    setTimeout(() => {
+        // Проверяем, что мы не в цикле
+        if (errorRedirectCount > MAX_ERROR_REDIRECTS) {
+            console.error('Too many redirects. Stopping.');
+            errorRedirectCount = 0;
+            lastErrorPath = null;
+            return;
+        }
+        
+        router.push('/404').catch((err) => {
+            console.error('Failed to redirect to 404:', err);
+            errorRedirectCount = 0;
+            lastErrorPath = null;
+        });
+    }, 100);
+});
+
+// Сбрасываем счетчик при успешной навигации
+router.afterEach(() => {
+    errorRedirectCount = 0;
+    lastErrorPath = null;
 });
 
 // Initialize app
@@ -662,9 +800,69 @@ store.dispatch('fetchUser').then((user) => {
 app.use(store);
 app.use(router);
 
+// Глобальная функция для скрытия прелоадера
+window.hidePreloader = () => {
+    const preloader = document.getElementById('preloader');
+    if (preloader && !preloader.classList.contains('hidden')) {
+        preloader.classList.add('hidden');
+        // Удаляем прелоадер из DOM после анимации
+        setTimeout(() => {
+            if (preloader.parentNode) {
+                preloader.remove();
+            }
+        }, 500);
+    }
+};
+
 // Mount app
 // Монтируем приложение в контейнер #app (единая точка входа)
 const appContainer = document.getElementById('app');
 if (appContainer) {
     app.mount('#app');
+    
+    // Отслеживаем загрузку контента через router
+    let contentCheckInterval;
+    let hasContent = false;
+    
+    // Функция проверки наличия контента в видимой области
+    const checkContentLoaded = () => {
+        // Проверяем наличие контента в #app
+        const appContent = document.querySelector('#app > *');
+        if (!appContent) return false;
+        
+        // Проверяем, что контент имеет размеры (отрендерился)
+        const contentHeight = appContent.offsetHeight;
+        if (contentHeight < 50) return false;
+        
+        // Проверяем наличие основных элементов на странице
+        const hasVisibleContent = 
+            document.querySelector('.home-page, .product-page, .service-page, .case-page, .products-page, .services-page, .cases-page, .about-page, .contact-page, .admin-layout, .page-content') ||
+            document.querySelector('[class*="-page"], [class*="layout"]');
+        
+        return !!hasVisibleContent;
+    };
+    
+    // Запускаем проверку после монтирования Vue
+    setTimeout(() => {
+        contentCheckInterval = setInterval(() => {
+            if (checkContentLoaded()) {
+                hasContent = true;
+                clearInterval(contentCheckInterval);
+                
+                // Даем небольшую задержку для рендеринга изображений и стилей
+                setTimeout(() => {
+                    window.hidePreloader();
+                }, 200);
+            }
+        }, 50);
+        
+        // Принудительно скрываем прелоадер через 5 секунд (защита от зависания)
+        setTimeout(() => {
+            if (!hasContent) {
+                clearInterval(contentCheckInterval);
+                console.warn('Preloader: forced hide after 5s timeout');
+                window.hidePreloader();
+            }
+        }, 5000);
+    }, 100);
 }
