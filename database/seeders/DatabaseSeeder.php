@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             CasesBlockSettingsSeeder::class,
             CopyMediaFilesSeeder::class,
             ProductsServicesOptionsCasesSeeder::class,
+            ImportProductsServicesSeeder::class, // Импорт данных продуктов, сервисов и баннеров из JSON
             AboutSettingsSeeder::class,
             ContactSettingsSeeder::class,
             FooterSettingsSeeder::class,

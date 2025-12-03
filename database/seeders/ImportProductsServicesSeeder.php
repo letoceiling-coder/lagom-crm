@@ -29,7 +29,7 @@ class ImportProductsServicesSeeder extends Seeder
         $this->importFile = env('IMPORT_FILE') 
             ?: database_path('seeders/exports/products_services_export.json');
 
-        // Если файл не указан, ищем последний экспортированный файл
+        // Если файл не указан или не существует, ищем последний экспортированный файл
         if (!File::exists($this->importFile)) {
             $exportPath = database_path('seeders/exports');
             if (File::exists($exportPath)) {
@@ -37,20 +37,28 @@ class ImportProductsServicesSeeder extends Seeder
                 if (!empty($files)) {
                     // Сортируем по времени модификации и берем последний
                     usort($files, function($a, $b) {
-                        return filemtime($b) - filemtime($a);
+                        $timeA = @filemtime($a) ?: 0;
+                        $timeB = @filemtime($b) ?: 0;
+                        // Если время одинаковое, сортируем по имени (более новый по дате в имени)
+                        if ($timeA === $timeB) {
+                            return strcmp($b, $a); // Обратная сортировка по имени
+                        }
+                        return $timeB - $timeA;
                     });
                     $this->importFile = $files[0];
                     $this->command->info("📁 Автоматически выбран файл: " . basename($this->importFile));
+                } else {
+                    $this->command->warn('⚠️ Файл импорта не найден и нет экспортированных файлов');
+                    $this->command->info('💡 Пропускаем импорт данных. Для импорта выполните: php artisan db:seed --class=ExportProductsServicesSeeder');
+                    return;
                 }
+            } else {
+                $this->command->warn('⚠️ Директория exports не найдена: ' . $exportPath);
+                $this->command->info('💡 Пропускаем импорт данных. Для импорта выполните: php artisan db:seed --class=ExportProductsServicesSeeder');
+                return;
             }
         } else {
             $this->command->info("📁 Используется указанный файл: " . basename($this->importFile));
-        }
-
-        if (!File::exists($this->importFile)) {
-            $this->command->error('❌ Файл импорта не найден: ' . $this->importFile);
-            $this->command->info('💡 Сначала выполните: php artisan db:seed --class=ExportProductsServicesSeeder');
-            return;
         }
 
         $this->command->info('🚀 Начало импорта данных из файла: ' . $this->importFile);
@@ -64,6 +72,14 @@ class ImportProductsServicesSeeder extends Seeder
 
             $this->command->info("📊 Версия экспорта: " . ($importData['version'] ?? 'неизвестна'));
             $this->command->info("📅 Дата экспорта: " . ($importData['exported_at'] ?? 'неизвестна'));
+            
+            // Проверяем наличие баннеров в файле
+            $bannersCount = count($importData['banners'] ?? []);
+            if ($bannersCount > 0) {
+                $this->command->info("🎨 Баннеров в файле: {$bannersCount}");
+            } else {
+                $this->command->warn("⚠️ Баннеры не найдены в файле экспорта");
+            }
 
             // Импортируем данные в правильном порядке
             $this->importChapters($importData['chapters'] ?? []);
