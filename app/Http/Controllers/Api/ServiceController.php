@@ -51,29 +51,75 @@ class ServiceController extends Controller
 
         // Для списка услуг - оптимизированный запрос без лишних связей
         return Cache::remember($cacheKey, $cacheTime, function () use ($request) {
-            $query = Service::with(['image', 'icon', 'chapter'])->ordered();
+            try {
+                // Для списка услуг загружаем только необходимые связи
+                $query = Service::with(['image', 'icon'])->ordered();
 
-            if ($request->has('chapter_id')) {
-                $query->where('chapter_id', $request->chapter_id);
+                if ($request->has('chapter_id')) {
+                    $query->where('chapter_id', $request->chapter_id);
+                }
+
+                if ($request->has('active')) {
+                    $query->where('is_active', $request->boolean('active'));
+                } else {
+                    $query->active();
+                }
+
+                // Убираем лимит для списка услуг или делаем его большим
+                // Для страницы /services нужно показать все услуги
+                $limit = $request->get('limit', 0);
+                if ($limit > 0 && $limit < 10000) {
+                    $query->limit($limit);
+                }
+
+                $services = $query->get();
+
+                // Используем минимальный набор данных для списка (оптимизировано)
+                $data = $services->map(function($service) {
+                    $imageData = null;
+                    if ($service->relationLoaded('image') && $service->image) {
+                        $imageData = [
+                            'id' => $service->image->id,
+                            'url' => $service->image->url ?? null,
+                            'alt' => $service->image->alt ?? $service->name,
+                        ];
+                    }
+                    
+                    $iconData = null;
+                    if ($service->relationLoaded('icon') && $service->icon) {
+                        $iconData = [
+                            'id' => $service->icon->id,
+                            'url' => $service->icon->url ?? null,
+                            'alt' => $service->icon->alt ?? $service->name,
+                        ];
+                    }
+                    
+                    return [
+                        'id' => $service->id,
+                        'name' => $service->name,
+                        'slug' => $service->slug,
+                        'description' => $service->description,
+                        'image' => $imageData,
+                        'icon' => $iconData,
+                        'chapter_id' => $service->chapter_id,
+                        'order' => $service->order,
+                        'is_active' => $service->is_active,
+                        'category' => 'services',
+                    ];
+                });
+
+                return response()->json([
+                    'data' => $data,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Ошибка при загрузке услуг: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                return response()->json([
+                    'error' => 'Ошибка при загрузке услуг',
+                    'message' => config('app.debug') ? $e->getMessage() : 'Внутренняя ошибка сервера',
+                ], 500);
             }
-
-            if ($request->has('active')) {
-                $query->where('is_active', $request->boolean('active'));
-            } else {
-                $query->active();
-            }
-
-            // Ограничение количества для оптимизации
-            $limit = $request->get('limit', 100);
-            if ($limit > 0) {
-                $query->limit($limit);
-            }
-
-            $services = $query->get();
-
-            return response()->json([
-                'data' => ServiceResource::collection($services),
-            ]);
         });
     }
 
