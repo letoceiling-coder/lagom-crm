@@ -62,6 +62,60 @@ class ServicesFromCsvSeeder extends Seeder
                 $this->command->warn("Папка с изображениями не найдена. Изображения не будут загружены.");
             }
             
+            // Собираем все имена файлов изображений из CSV для резервного использования
+            $availableImageFiles = [];
+            $availableIconFiles = [];
+            foreach ($rows as $row) {
+                if (count($row) >= 15) {
+                    $imagePath = $this->cleanValue($row[8] ?? '');
+                    $iconPath = $this->cleanValue($row[11] ?? '');
+                    
+                    if (!empty($imagePath)) {
+                        $imageFileName = basename($imagePath);
+                        if (!in_array($imageFileName, $availableImageFiles)) {
+                            $availableImageFiles[] = $imageFileName;
+                        }
+                    }
+                    
+                    if (!empty($iconPath)) {
+                        $iconFileName = basename($iconPath);
+                        if (!in_array($iconFileName, $availableIconFiles)) {
+                            $availableIconFiles[] = $iconFileName;
+                        }
+                    }
+                }
+            }
+            
+            // Находим существующие изображения в медиа-библиотеке
+            $this->command->info("Поиск существующих изображений в медиа-библиотеке...");
+            $existingImages = [];
+            $existingIcons = [];
+            
+            foreach ($availableImageFiles as $fileName) {
+                $media = Media::where('original_name', $fileName)
+                    ->orWhere('name', 'like', '%' . $fileName . '%')
+                    ->first();
+                if ($media) {
+                    $existingImages[$fileName] = $media;
+                }
+            }
+            
+            foreach ($availableIconFiles as $fileName) {
+                $media = Media::where('original_name', $fileName)
+                    ->orWhere('name', 'like', '%' . $fileName . '%')
+                    ->first();
+                if ($media) {
+                    $existingIcons[$fileName] = $media;
+                }
+            }
+            
+            $this->command->info("Найдено изображений в библиотеке: " . count($existingImages));
+            $this->command->info("Найдено иконок в библиотеке: " . count($existingIcons));
+            
+            // Используем первое найденное изображение/иконку как резервное
+            $fallbackImage = !empty($existingImages) ? reset($existingImages) : null;
+            $fallbackIcon = !empty($existingIcons) ? reset($existingIcons) : null;
+            
             $stats = [
                 'services' => 0,
                 'chapters' => 0,
@@ -107,9 +161,13 @@ class ServicesFromCsvSeeder extends Seeder
                         $imageFileName = basename($imagePath);
                         
                         // Сначала пробуем найти существующее изображение в медиа-библиотеке
-                        $imageMedia = Media::where('original_name', $imageFileName)
-                            ->orWhere('name', 'like', '%' . $imageFileName . '%')
-                            ->first();
+                        if (isset($existingImages[$imageFileName])) {
+                            $imageMedia = $existingImages[$imageFileName];
+                        } else {
+                            $imageMedia = Media::where('original_name', $imageFileName)
+                                ->orWhere('name', 'like', '%' . $imageFileName . '%')
+                                ->first();
+                        }
                         
                         // Если не найдено и есть папка с изображениями - загружаем
                         if (!$imageMedia && $imagesPath) {
@@ -128,9 +186,18 @@ class ServicesFromCsvSeeder extends Seeder
                             $stats['images']++;
                         }
                         
+                        // Если все еще не найдено - используем резервное изображение из CSV
+                        if (!$imageMedia && $fallbackImage) {
+                            $imageMedia = $fallbackImage;
+                            $this->command->info("    → Использовано резервное изображение: {$fallbackImage->original_name}");
+                        }
+                        
                         if (!$imageMedia) {
                             $this->command->warn("    ⚠ Изображение не найдено: {$imageFileName}");
                         }
+                    } elseif ($fallbackImage) {
+                        // Если путь к изображению пустой, но есть резервное - используем его
+                        $imageMedia = $fallbackImage;
                     }
 
                     // Загружаем иконку
@@ -139,9 +206,13 @@ class ServicesFromCsvSeeder extends Seeder
                         $iconFileName = basename($iconPath);
                         
                         // Сначала пробуем найти существующую иконку в медиа-библиотеке
-                        $iconMedia = Media::where('original_name', $iconFileName)
-                            ->orWhere('name', 'like', '%' . $iconFileName . '%')
-                            ->first();
+                        if (isset($existingIcons[$iconFileName])) {
+                            $iconMedia = $existingIcons[$iconFileName];
+                        } else {
+                            $iconMedia = Media::where('original_name', $iconFileName)
+                                ->orWhere('name', 'like', '%' . $iconFileName . '%')
+                                ->first();
+                        }
                         
                         // Если не найдено и есть папка с изображениями - загружаем
                         if (!$iconMedia && $imagesPath) {
@@ -160,9 +231,18 @@ class ServicesFromCsvSeeder extends Seeder
                             $stats['icons']++;
                         }
                         
+                        // Если все еще не найдено - используем резервную иконку из CSV
+                        if (!$iconMedia && $fallbackIcon) {
+                            $iconMedia = $fallbackIcon;
+                            $this->command->info("    → Использована резервная иконка: {$fallbackIcon->original_name}");
+                        }
+                        
                         if (!$iconMedia) {
                             $this->command->warn("    ⚠ Иконка не найдена: {$iconFileName}");
                         }
+                    } elseif ($fallbackIcon) {
+                        // Если путь к иконке пустой, но есть резервная - используем ее
+                        $iconMedia = $fallbackIcon;
                     }
 
                     // Создаем/обновляем услугу
