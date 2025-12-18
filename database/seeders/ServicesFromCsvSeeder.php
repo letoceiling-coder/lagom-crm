@@ -103,38 +103,64 @@ class ServicesFromCsvSeeder extends Seeder
 
                     // Загружаем изображение
                     $imageMedia = null;
-                    if (!empty($imagePath) && $imagesPath) {
+                    if (!empty($imagePath)) {
                         $imageFileName = basename($imagePath);
-                        $imageFullPath = $imagesPath . '/services/' . $imageFileName;
-                        if (!file_exists($imageFullPath)) {
-                            // Пробуем найти файл без учета регистра
-                            $imageFullPath = $this->findFileCaseInsensitive($imagesPath . '/services', $imageFileName);
-                        }
-                        if ($imageFullPath && file_exists($imageFullPath)) {
-                            $imageMedia = $this->uploadImage($imageFullPath, 'services');
-                            if ($imageMedia) {
-                                $stats['images']++;
+                        
+                        // Сначала пробуем найти существующее изображение в медиа-библиотеке
+                        $imageMedia = Media::where('original_name', $imageFileName)
+                            ->orWhere('name', 'like', '%' . $imageFileName . '%')
+                            ->first();
+                        
+                        // Если не найдено и есть папка с изображениями - загружаем
+                        if (!$imageMedia && $imagesPath) {
+                            $imageFullPath = $imagesPath . '/services/' . $imageFileName;
+                            if (!file_exists($imageFullPath)) {
+                                // Пробуем найти файл без учета регистра
+                                $imageFullPath = $this->findFileCaseInsensitive($imagesPath . '/services', $imageFileName);
                             }
-                        } else {
+                            if ($imageFullPath && file_exists($imageFullPath)) {
+                                $imageMedia = $this->uploadImage($imageFullPath, 'services');
+                                if ($imageMedia) {
+                                    $stats['images']++;
+                                }
+                            }
+                        } elseif ($imageMedia) {
+                            $stats['images']++;
+                        }
+                        
+                        if (!$imageMedia) {
                             $this->command->warn("    ⚠ Изображение не найдено: {$imageFileName}");
                         }
                     }
 
                     // Загружаем иконку
                     $iconMedia = null;
-                    if (!empty($iconPath) && $imagesPath) {
+                    if (!empty($iconPath)) {
                         $iconFileName = basename($iconPath);
-                        $iconFullPath = $imagesPath . '/icons/' . $iconFileName;
-                        if (!file_exists($iconFullPath)) {
-                            // Пробуем найти файл без учета регистра
-                            $iconFullPath = $this->findFileCaseInsensitive($imagesPath . '/icons', $iconFileName);
-                        }
-                        if ($iconFullPath && file_exists($iconFullPath)) {
-                            $iconMedia = $this->uploadImage($iconFullPath, 'icons');
-                            if ($iconMedia) {
-                                $stats['icons']++;
+                        
+                        // Сначала пробуем найти существующую иконку в медиа-библиотеке
+                        $iconMedia = Media::where('original_name', $iconFileName)
+                            ->orWhere('name', 'like', '%' . $iconFileName . '%')
+                            ->first();
+                        
+                        // Если не найдено и есть папка с изображениями - загружаем
+                        if (!$iconMedia && $imagesPath) {
+                            $iconFullPath = $imagesPath . '/icons/' . $iconFileName;
+                            if (!file_exists($iconFullPath)) {
+                                // Пробуем найти файл без учета регистра
+                                $iconFullPath = $this->findFileCaseInsensitive($imagesPath . '/icons', $iconFileName);
                             }
-                        } else {
+                            if ($iconFullPath && file_exists($iconFullPath)) {
+                                $iconMedia = $this->uploadImage($iconFullPath, 'icons');
+                                if ($iconMedia) {
+                                    $stats['icons']++;
+                                }
+                            }
+                        } elseif ($iconMedia) {
+                            $stats['icons']++;
+                        }
+                        
+                        if (!$iconMedia) {
                             $this->command->warn("    ⚠ Иконка не найдена: {$iconFileName}");
                         }
                     }
