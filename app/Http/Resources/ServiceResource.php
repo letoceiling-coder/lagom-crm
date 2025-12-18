@@ -20,6 +20,7 @@ class ServiceResource extends JsonResource
             'name' => $this->name,
             'slug' => $this->slug,
             'description' => $this->description,
+            'html_content' => $this->html_content,
             'image_id' => $this->image_id,
             'image' => $this->whenLoaded('image', function() {
                 return new MediaResource($this->image);

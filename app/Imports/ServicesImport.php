@@ -134,6 +134,7 @@ class ServicesImport
                 'name' => 'required|string|max:255',
                 'slug' => 'nullable|string|max:255',
                 'description' => 'nullable',
+                'html_content' => 'nullable|string',
                 'chapter_id' => 'nullable|exists:chapters,id',
                 'image_id' => 'nullable|exists:media,id',
                 'icon_id' => 'nullable|exists:media,id',
@@ -238,6 +239,11 @@ class ServicesImport
                     break;
                 case 'Описание':
                     $data['description'] = !empty($value) ? $value : null;
+                    break;
+                case 'HTML контент':
+                case 'HTML':
+                case 'Html Content':
+                    $data['html_content'] = !empty($value) ? $value : null;
                     break;
                 case 'ID раздела':
                 case 'Раздел ID':

@@ -93,6 +93,9 @@
                         </div>
                     </div>
 
+                    <!-- HTML контент услуги -->
+                    <div v-if="service.html_content" class="mt-8 service-html-content" v-html="service.html_content"></div>
+
                     <!-- Информация о параметрах услуги -->
                     <div class="mt-8 py-5 relative bg-[#F4F6FC] rounded-lg">
                         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 px-4 md:px-6">
@@ -415,8 +418,10 @@ export default {
 
         const fetchServices = async () => {
             if (loadingLists.value) return;
+            loadingLists.value = true;
             try {
-                const response = await fetch('/api/public/services?active=1&limit=8', {
+                // Загружаем все услуги (limit=10000 чтобы получить все)
+                const response = await fetch('/api/public/services?active=1&limit=10000', {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json',
@@ -425,10 +430,13 @@ export default {
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    servicesList.value = (data.data || []).filter(s => s.id !== service.value?.id).slice(0, 8);
+                    // Фильтруем все услуги, исключая текущую
+                    servicesList.value = (data.data || []).filter(s => s.id !== service.value?.id);
                 }
             } catch (err) {
                 console.error('Error fetching services:', err);
+            } finally {
+                loadingLists.value = false;
             }
         };
 
@@ -590,4 +598,96 @@ export default {
     },
 };
 </script>
+
+<style scoped>
+.service-html-content {
+    color: #111827;
+}
+
+.service-html-content :deep(h1),
+.service-html-content :deep(h2),
+.service-html-content :deep(h3),
+.service-html-content :deep(h4),
+.service-html-content :deep(h5),
+.service-html-content :deep(h6) {
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 1rem;
+    margin-top: 1.5rem;
+}
+
+.service-html-content :deep(h1) {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+}
+
+.service-html-content :deep(h2) {
+    font-size: 1.5rem;
+    line-height: 2rem;
+}
+
+.service-html-content :deep(h3) {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+}
+
+.service-html-content :deep(p) {
+    margin-bottom: 1rem;
+    font-size: 1rem;
+    line-height: 1.75;
+}
+
+.service-html-content :deep(ul),
+.service-html-content :deep(ol) {
+    margin-bottom: 1rem;
+    margin-left: 1.5rem;
+}
+
+.service-html-content :deep(li) {
+    margin-bottom: 0.5rem;
+}
+
+.service-html-content :deep(a) {
+    color: #688E67;
+    text-decoration: none;
+}
+
+.service-html-content :deep(a:hover) {
+    text-decoration: underline;
+}
+
+.service-html-content :deep(img) {
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    max-width: 100%;
+    height: auto;
+}
+
+.service-html-content :deep(blockquote) {
+    border-left: 4px solid #688E67;
+    padding-left: 1rem;
+    font-style: italic;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+.service-html-content :deep(table) {
+    width: 100%;
+    margin-bottom: 1rem;
+    border-collapse: collapse;
+}
+
+.service-html-content :deep(th),
+.service-html-content :deep(td) {
+    border: 1px solid #d1d5db;
+    padding: 0.5rem 1rem;
+}
+
+.service-html-content :deep(th) {
+    background-color: #f3f4f6;
+    font-weight: 600;
+}
+</style>
 

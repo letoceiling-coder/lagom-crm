@@ -148,6 +148,7 @@ class ServicesFromExcelSeeder extends Seeder
                 'name' => $name,
                 'slug' => $slug,
                 'description' => !empty($descriptionData) ? $descriptionData : null,
+                'html_content' => !empty($htmlText) ? $htmlText : null,
                 'order' => $order,
                 'is_active' => true,
             ]

@@ -16,6 +16,7 @@ class Service extends Model
         'name',
         'slug',
         'description',
+        'html_content',
         'seo_title',
         'seo_description',
         'seo_keywords',
