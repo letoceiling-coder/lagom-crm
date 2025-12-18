@@ -94,6 +94,15 @@ class Service extends Model
     }
 
     /**
+     * Случаи, связанные с услугой
+     */
+    public function cases(): BelongsToMany
+    {
+        return $this->belongsToMany(ProjectCase::class, 'cases_service', 'service_id', 'cases_id')
+            ->withTimestamps();
+    }
+
+    /**
      * Scope для активных услуг
      */
     public function scopeActive($query)

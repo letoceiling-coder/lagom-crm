@@ -72,23 +72,49 @@ class ServiceResource extends JsonResource
                     ];
                 })->toArray();
             }),
-            // Получаем все активные разделы с их случаями для выбора (только если запрошено)
-            'available_chapters' => $this->when($request->has('include_chapters'), function() {
-                return \App\Models\Chapter::active()->ordered()->with(['cases' => function($query) {
-                    $query->where('is_active', true)->ordered();
-                }])->get()->map(function($chapter) {
-                    return [
-                        'id' => $chapter->id,
-                        'name' => $chapter->name,
-                        'cases' => $chapter->cases->map(function($case) {
-                            return [
-                                'id' => $case->id,
-                                'name' => $case->name,
-                            ];
-                        })->toArray(),
+            // Получаем все активные разделы с их случаями для выбора
+            // Разделы берутся из случаев, связанных с услугой
+            'available_chapters' => function() {
+                // Получаем все случаи, связанные с услугой
+                $cases = $this->cases()->with('chapter')->where('is_active', true)->get();
+                
+                // Группируем случаи по разделам
+                $chaptersMap = [];
+                foreach ($cases as $case) {
+                    if (!$case->chapter || !$case->chapter->is_active) {
+                        continue;
+                    }
+                    
+                    $chapterId = $case->chapter->id;
+                    if (!isset($chaptersMap[$chapterId])) {
+                        $chaptersMap[$chapterId] = [
+                            'id' => $case->chapter->id,
+                            'name' => $case->chapter->name,
+                            'order' => $case->chapter->order ?? 0,
+                            'cases' => [],
+                        ];
+                    }
+                    
+                    $chaptersMap[$chapterId]['cases'][] = [
+                        'id' => $case->id,
+                        'name' => $case->name,
                     ];
-                })->toArray();
-            }),
+                }
+                
+                // Сортируем разделы по order
+                usort($chaptersMap, function($a, $b) {
+                    return ($a['order'] ?? 0) <=> ($b['order'] ?? 0);
+                });
+                
+                // Сортируем случаи внутри каждого раздела
+                foreach ($chaptersMap as &$chapter) {
+                    usort($chapter['cases'], function($a, $b) {
+                        return 0; // Можно добавить сортировку по order если нужно
+                    });
+                }
+                
+                return array_values($chaptersMap);
+            },
             'app_categories' => $this->when($request->has('include_categories'), function() {
                 return AppCategory::all()->map(function($category) {
                     return [

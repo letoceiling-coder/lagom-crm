@@ -280,6 +280,7 @@ class ServiceController extends Controller
                 'image:id,name,disk,metadata,width,height',
                 'icon:id,name,disk,metadata',
                 'chapter:id,name',
+                'cases.chapter', // Загружаем случаи с их разделами
             ])
                 ->where('is_active', true)
                 ->where(function($query) use ($cleanSlug) {
