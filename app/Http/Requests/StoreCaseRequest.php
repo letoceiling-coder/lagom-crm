@@ -23,9 +23,9 @@ class StoreCaseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:cases,slug',
-            'description' => 'required|array',
+            'name' => 'required|string|max:500',
+            'slug' => 'nullable|string|max:500|unique:cases,slug',
+            'description' => 'nullable|array',
             'html' => 'nullable|array',
             'image_id' => 'nullable|exists:media,id',
             'icon_id' => 'nullable|exists:media,id',
