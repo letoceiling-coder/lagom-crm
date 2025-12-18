@@ -755,6 +755,7 @@ class DeployController extends Controller
                 'ImportProductsServicesSeeder', // Импорт данных продуктов, сервисов и баннеров
                 'RegisterAllMediaFilesSeeder',
                 'UpdateMediaFolderSeeder',
+                'ServicesFromExcelSeeder', // Импорт услуг из Excel файла
             ];
 
             $results = [];
