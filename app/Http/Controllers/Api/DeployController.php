@@ -710,8 +710,25 @@ class DeployController extends Controller
             if ($process->successful()) {
                 // Парсим вывод для определения количества миграций
                 $output = $process->output();
-                preg_match_all('/Migrating:\s+(\d{4}_\d{2}_\d{2}_\d{6}_[\w_]+)/', $output, $matches);
-                $migrationsRun = count($matches[0]);
+                // Ищем разные форматы вывода миграций
+                preg_match_all('/Migrating:\s+(\d{4}_\d{2}_\d{2}_\d{6}_[\w_]+)/', $output, $matches1);
+                preg_match_all('/DONE\s+(\d{4}_\d{2}_\d{2}_\d{6}_[\w_]+)/', $output, $matches2);
+                preg_match_all('/(\d{4}_\d{2}_\d{2}_\d{6}_[\w_]+)\s+\.+.*DONE/', $output, $matches3);
+                
+                $migrationsRun = max(
+                    count($matches1[0]),
+                    count($matches2[0]),
+                    count($matches3[0])
+                );
+                
+                // Также проверяем, есть ли в выводе информация о выполненных миграциях
+                if (stripos($output, 'migrated') !== false || stripos($output, 'migrating') !== false) {
+                    // Если есть упоминания о миграциях, но не нашли точное количество
+                    if ($migrationsRun === 0 && (stripos($output, 'nothing to migrate') === false && stripos($output, 'nothing to migrate') === false)) {
+                        // Возможно, миграции были выполнены, но в другом формате
+                        $migrationsRun = 1; // Предполагаем, что хотя бы одна миграция была
+                    }
+                }
 
                 return [
                     'status' => 'success',

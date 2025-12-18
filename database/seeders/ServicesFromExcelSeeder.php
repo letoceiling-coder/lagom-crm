@@ -153,13 +153,12 @@ class ServicesFromExcelSeeder extends Seeder
             ]
         );
         
-        // Обновляем html_content отдельно, чтобы гарантировать обновление даже если поле null
-        if (!empty($htmlText)) {
+        // Всегда обновляем html_content, если оно указано в Excel
+        // Это гарантирует, что данные из Excel будут применены
+        if ($htmlText !== null && $htmlText !== '') {
             $service->html_content = $htmlText;
             $service->save();
-        } elseif ($htmlText === '' && $service->html_content !== null) {
-            // Если в Excel пусто, но в базе есть значение - оставляем как есть
-            // Не обновляем, чтобы не потерять существующие данные
+            $this->command->info("    → HTML контент обновлен для услуги: {$name}");
         }
         
         return $service;
