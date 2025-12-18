@@ -76,6 +76,7 @@
 
 <script>
 import { ref, computed, watch, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 
 export default {
     name: 'SearchModal',
@@ -87,13 +88,12 @@ export default {
     },
     emits: ['close', 'search'],
     setup(props, { emit }) {
+        const router = useRouter();
         const searchQuery = ref('');
         const searchInput = ref(null);
 
         const handleSearch = () => {
             if (searchQuery.value.trim()) {
-                // Используем router для навигации на страницу поиска
-                const router = require('vue-router').useRouter();
                 router.push({
                     name: 'search',
                     query: { q: searchQuery.value.trim() }
