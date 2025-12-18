@@ -184,16 +184,50 @@ class DeployController extends Controller
             return $phpPath;
         }
 
-        // 2. Попробовать автоматически найти PHP
-        $possiblePaths = ['php8.2', 'php8.3', 'php8.1', 'php'];
+        // 2. Попробовать автоматически найти PHP (сначала полные пути, потом короткие)
+        $possiblePaths = [
+            '/usr/local/bin/php8.2',
+            '/usr/local/bin/php8.3',
+            '/usr/local/bin/php8.1',
+            '/usr/bin/php8.2',
+            '/usr/bin/php8.3',
+            '/usr/bin/php8.1',
+            'php8.2',
+            'php8.3',
+            'php8.1',
+            'php',
+        ];
+        
         foreach ($possiblePaths as $path) {
             if ($this->isPhpExecutable($path)) {
-                return $path;
+                // Проверяем версию - нужна минимум 8.1
+                $version = $this->getPhpVersionFromPath($path);
+                if ($version && version_compare($version, '8.1.0', '>=')) {
+                    return $path;
+                }
             }
         }
 
-        // 3. Fallback на 'php'
+        // 3. Fallback на 'php' (с предупреждением)
+        Log::warning('Не найдена подходящая версия PHP (требуется >= 8.1), используется системный php');
         return 'php';
+    }
+
+    /**
+     * Получить версию PHP из пути
+     */
+    protected function getPhpVersionFromPath(string $path): ?string
+    {
+        try {
+            exec("{$path} --version 2>&1", $output, $returnCode);
+            if ($returnCode === 0 && isset($output[0])) {
+                preg_match('/PHP\s+(\d+\.\d+\.\d+)/', $output[0], $matches);
+                return $matches[1] ?? null;
+            }
+        } catch (\Exception $e) {
+            // Ignore
+        }
+        return null;
     }
 
     /**
@@ -221,16 +255,8 @@ class DeployController extends Controller
      */
     protected function getPhpVersion(): string
     {
-        try {
-            exec("{$this->phpPath} --version 2>&1", $output, $returnCode);
-            if ($returnCode === 0 && isset($output[0])) {
-                preg_match('/PHP\s+(\d+\.\d+\.\d+)/', $output[0], $matches);
-                return $matches[1] ?? 'unknown';
-            }
-        } catch (\Exception $e) {
-            // Ignore
-        }
-        return 'unknown';
+        $version = $this->getPhpVersionFromPath($this->phpPath);
+        return $version ?? 'unknown';
     }
 
     /**
@@ -566,7 +592,19 @@ class DeployController extends Controller
             return $composerPath;
         }
 
-        // 2. Попробовать найти composer в стандартных местах
+        // 2. Проверить composer.phar в корне проекта (самый надежный вариант)
+        $projectComposer = $this->basePath . '/composer.phar';
+        if (file_exists($projectComposer)) {
+            return $projectComposer;
+        }
+
+        // 3. Попробовать установить composer.phar автоматически
+        $installed = $this->installComposerPhar();
+        if ($installed && file_exists($projectComposer)) {
+            return $projectComposer;
+        }
+
+        // 4. Попробовать найти composer в стандартных местах
         $possiblePaths = [
             '/home/d/dsc23ytp/.local/bin/composer',
             '/usr/local/bin/composer',
@@ -588,8 +626,61 @@ class DeployController extends Controller
             }
         }
 
-        // 3. Fallback на 'composer' (будет ошибка, если не найден)
+        // 5. Fallback на 'composer' (будет ошибка, если не найден)
         return 'composer';
+    }
+
+    /**
+     * Установить composer.phar в проект
+     */
+    protected function installComposerPhar(): bool
+    {
+        try {
+            $composerPharPath = $this->basePath . '/composer.phar';
+            
+            // Если уже установлен, не устанавливаем снова
+            if (file_exists($composerPharPath)) {
+                return true;
+            }
+
+            Log::info('Попытка автоматической установки composer.phar...');
+
+            // Скачиваем установщик
+            $installerPath = $this->basePath . '/composer-setup.php';
+            $installerContent = @file_get_contents('https://getcomposer.org/installer');
+            
+            if ($installerContent === false) {
+                Log::warning('Не удалось скачать composer installer');
+                return false;
+            }
+
+            file_put_contents($installerPath, $installerContent);
+
+            // Запускаем установщик
+            $command = "{$this->phpPath} {$installerPath} --install-dir={$this->basePath} --filename=composer.phar";
+            $process = Process::path($this->basePath)
+                ->timeout(120)
+                ->run($command);
+
+            // Удаляем установщик
+            if (file_exists($installerPath)) {
+                @unlink($installerPath);
+            }
+
+            if ($process->successful() && file_exists($composerPharPath)) {
+                // Делаем файл исполняемым
+                @chmod($composerPharPath, 0755);
+                Log::info('composer.phar успешно установлен в проект');
+                return true;
+            }
+
+            Log::warning('Не удалось установить composer.phar: ' . ($process->errorOutput() ?: $process->output()));
+            return false;
+
+        } catch (\Exception $e) {
+            Log::warning('Ошибка при установке composer.phar: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**
