@@ -129,6 +129,34 @@ class ServicesImport
             // Парсим данные строки
             $data = $this->parseRow($row, $headers, $extractPath, $rowNumber);
             
+            // Проверяем обязательные поля перед валидацией
+            $requiredFields = ['name'];
+            $missingFields = [];
+            foreach ($requiredFields as $field) {
+                if (empty($data[$field])) {
+                    $missingFields[] = $field;
+                }
+            }
+
+            if (!empty($missingFields)) {
+                $fieldNames = [
+                    'name' => 'Название',
+                    'slug' => 'Slug',
+                ];
+                $missingFieldNames = array_map(function($field) use ($fieldNames) {
+                    return $fieldNames[$field] ?? $field;
+                }, $missingFields);
+                
+                $this->errors[] = [
+                    'row' => $rowNumber,
+                    'errors' => ['Отсутствуют обязательные поля: ' . implode(', ', $missingFieldNames)],
+                    'data' => $data,
+                    'missing_fields' => $missingFields,
+                ];
+                $this->skipCount++;
+                continue;
+            }
+
             // Валидация
             $validator = Validator::make($data, [
                 'name' => 'required|string|max:255',
@@ -143,9 +171,26 @@ class ServicesImport
             ]);
 
             if ($validator->fails()) {
+                $errorMessages = [];
+                foreach ($validator->errors()->toArray() as $field => $messages) {
+                    $fieldNames = [
+                        'name' => 'Название',
+                        'slug' => 'Slug',
+                        'chapter_id' => 'ID раздела',
+                        'image_id' => 'ID изображения',
+                        'icon_id' => 'ID иконки',
+                        'order' => 'Порядок',
+                        'is_active' => 'Активен',
+                    ];
+                    $fieldName = $fieldNames[$field] ?? $field;
+                    foreach ($messages as $message) {
+                        $errorMessages[] = "{$fieldName}: {$message}";
+                    }
+                }
+                
                 $this->errors[] = [
                     'row' => $rowNumber,
-                    'errors' => $validator->errors()->all(),
+                    'errors' => $errorMessages,
                     'data' => $data,
                 ];
                 $this->skipCount++;
@@ -158,7 +203,11 @@ class ServicesImport
                     $data['slug'] = Str::slug($data['name']);
                     $counter = 1;
                     $originalSlug = $data['slug'];
-                    while (Service::where('slug', $data['slug'])->exists()) {
+                    // При обновлении исключаем текущую услугу из проверки уникальности
+                    $excludeId = !empty($data['id']) ? $data['id'] : null;
+                    while (Service::where('slug', $data['slug'])->when($excludeId, function($q) use ($excludeId) {
+                        $q->where('id', '!=', $excludeId);
+                    })->exists()) {
                         $data['slug'] = $originalSlug . '-' . $counter;
                         $counter++;
                     }
@@ -173,21 +222,45 @@ class ServicesImport
                 // Убираем из данных поля, которых больше нет
                 unset($data['products'], $data['options'], $data['option_trees'], $data['instances']);
 
-                if (!empty($data['id']) && Service::find($data['id'])) {
-                    $service = Service::find($data['id']);
-                    $service->update($data);
+                // Если указан ID и услуга существует - обновляем, иначе создаем новую
+                $serviceId = $data['id'] ?? null;
+                unset($data['id']); // Убираем id из данных для create/update
+
+                if (!empty($serviceId)) {
+                    $service = Service::find($serviceId);
+                    if ($service) {
+                        // Обновляем существующую услугу
+                        $service->update($data);
+                        $this->successCount++;
+                    } else {
+                        // ID указан, но услуга не найдена - создаем новую
+                        $this->errors[] = [
+                            'row' => $rowNumber,
+                            'errors' => ["Услуга с ID {$serviceId} не найдена. Создана новая услуга."],
+                            'data' => $data,
+                        ];
+                        Service::create($data);
+                        $this->successCount++;
+                    }
                 } else {
-                    $service = Service::create($data);
+                    // ID не указан - создаем новую услугу
+                    Service::create($data);
+                    $this->successCount++;
                 }
 
-                $this->successCount++;
             } catch (\Exception $e) {
                 $this->errors[] = [
                     'row' => $rowNumber,
-                    'errors' => [$e->getMessage()],
+                    'errors' => ['Ошибка: ' . $e->getMessage()],
                     'data' => $data,
                 ];
                 $this->skipCount++;
+                Log::error('Service import error', [
+                    'row' => $rowNumber,
+                    'data' => $data,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
             }
         }
 

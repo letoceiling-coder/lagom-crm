@@ -239,21 +239,39 @@ export default {
                     throw new Error(errorMessage);
                 }
 
+                // Формируем детальное сообщение об ошибках
+                let errorsHtml = '';
+                if (result.errors && result.errors.length > 0) {
+                    errorsHtml = `
+                        <details class="mt-4 text-left" open>
+                            <summary class="cursor-pointer text-sm font-semibold mb-2">Ошибки и предупреждения (${result.errors.length})</summary>
+                            <div class="mt-2 max-h-60 overflow-y-auto text-xs space-y-2">
+                                ${result.errors.map(e => {
+                                    const errorText = Array.isArray(e.errors) ? e.errors.join('<br>') : e.errors;
+                                    const dataInfo = e.data ? `<br><small class="text-gray-500">Данные: ${JSON.stringify(e.data).substring(0, 100)}...</small>` : '';
+                                    return `<div class="p-2 bg-red-50 border border-red-200 rounded">
+                                        <strong>Строка ${e.row}:</strong><br>
+                                        <span class="text-red-700">${errorText}</span>
+                                        ${dataInfo}
+                                    </div>`;
+                                }).join('')}
+                            </div>
+                        </details>
+                    `;
+                }
+
                 await Swal.fire({
-                    title: 'Импорт завершен',
+                    title: result.success_count > 0 ? 'Импорт завершен' : 'Импорт завершен с ошибками',
                     html: `
-                        <p>${result.message}</p>
-                        ${result.errors && result.errors.length > 0 ? `
-                            <details class="mt-4 text-left">
-                                <summary class="cursor-pointer text-sm">Ошибки (${result.errors.length})</summary>
-                                <div class="mt-2 max-h-40 overflow-y-auto text-xs">
-                                    ${result.errors.map(e => `<p>Строка ${e.row}: ${e.errors.join(', ')}</p>`).join('')}
-                                </div>
-                            </details>
-                        ` : ''}
+                        <div class="text-left">
+                            <p class="mb-2"><strong>Успешно обработано:</strong> ${result.success_count || 0}</p>
+                            <p class="mb-4"><strong>Пропущено:</strong> ${result.skip_count || 0}</p>
+                            ${errorsHtml}
+                        </div>
                     `,
-                    icon: result.success_count > 0 ? 'success' : 'warning',
-                    confirmButtonText: 'ОК'
+                    icon: result.success_count > 0 ? (result.errors && result.errors.length > 0 ? 'warning' : 'success') : 'error',
+                    confirmButtonText: 'ОК',
+                    width: '600px'
                 });
 
                 // Очищаем input
