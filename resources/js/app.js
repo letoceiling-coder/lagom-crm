@@ -683,16 +683,54 @@ router.beforeEach(async (to, from, next) => {
                 ? to.meta.requiresRole 
                 : [to.meta.requiresRole];
             
-            // Проверяем, инициализирован ли store
+            // Если пользователь аутентифицирован, но данные еще не загружены, ждем загрузки
+            if (isAuthenticated && !store.state.user) {
+                try {
+                    await store.dispatch('fetchUser');
+                } catch (error) {
+                    console.error('Error fetching user:', error);
+                    // Если не удалось загрузить пользователя, перенаправляем на логин
+                    next('/login');
+                    return;
+                }
+            }
+            
+            // Проверяем наличие пользователя и ролей
+            const user = store.state.user;
+            if (!user) {
+                // Если пользователь не загружен, но есть токен - разрешаем доступ
+                // Проверка будет на уровне компонента или API
+                console.warn('User not loaded, allowing route access for component-level check');
+                next();
+                return;
+            }
+            
+            // Проверяем наличие ролей
+            if (!user.roles || !Array.isArray(user.roles) || user.roles.length === 0) {
+                // Если у пользователя нет ролей, перенаправляем на 403
+                console.warn('User has no roles, redirecting to 403');
+                next('/403');
+                return;
+            }
+            
+            // Проверяем роли через getter
             if (store.getters.hasAnyRole && typeof store.getters.hasAnyRole === 'function') {
-                if (!store.getters.hasAnyRole(requiredRoles)) {
+                const hasRole = store.getters.hasAnyRole(requiredRoles);
+                if (!hasRole) {
                     // Пользователь не имеет нужной роли - перенаправляем на 403
+                    console.warn('User does not have required roles:', requiredRoles, 'User roles:', user.roles.map(r => r.slug));
                     next('/403');
                     return;
                 }
             } else {
-                // Если store еще не инициализирован, разрешаем доступ (проверка будет на уровне компонента)
-                console.warn('Store not fully initialized, allowing route access');
+                // Fallback: проверяем роли напрямую
+                const userRoleSlugs = user.roles.map(role => role.slug);
+                const hasRequiredRole = requiredRoles.some(role => userRoleSlugs.includes(role));
+                if (!hasRequiredRole) {
+                    console.warn('User does not have required roles (fallback check):', requiredRoles, 'User roles:', userRoleSlugs);
+                    next('/403');
+                    return;
+                }
             }
         }
         
