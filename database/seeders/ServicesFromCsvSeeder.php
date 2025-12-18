@@ -29,67 +29,6 @@ class ServicesFromCsvSeeder extends Seeder
      */
     public function run(): void
     {
-        // Получаем путь к CSV файлу
-        $csvPath = env('SERVICES_CSV_PATH') ?? $this->findCsvFile();
-        
-        // Для локальной разработки - проверяем стандартный путь
-        if (!$csvPath || !file_exists($csvPath)) {
-            $windowsPath = 'C:\Users\dsc-2\Downloads\111_extracted\services.csv';
-            if (file_exists($windowsPath)) {
-                $csvPath = $windowsPath;
-            }
-        }
-        
-        if (!$csvPath || !file_exists($csvPath)) {
-            $this->command->error("CSV файл не найден!");
-            $this->command->info("Укажите путь к файлу через .env (SERVICES_CSV_PATH)");
-            $this->command->info("Или поместите файл services.csv в одну из стандартных директорий:");
-            $this->command->info("  - " . base_path('services.csv'));
-            $this->command->info("  - " . base_path('storage/app/services.csv'));
-            $this->command->info("  - " . storage_path('app/services.csv'));
-            return;
-        }
-
-        // Получаем путь к папке с изображениями
-        // Сначала пробуем рядом с CSV
-        $imagesPath = dirname($csvPath) . '/images';
-        if (!is_dir($imagesPath)) {
-            // Пробуем в папке services-seed
-            $servicesSeedPath = dirname($csvPath) . '/services-seed/images';
-            if (is_dir($servicesSeedPath)) {
-                $imagesPath = $servicesSeedPath;
-            } else {
-                // Пробуем стандартные пути на сервере
-                $possibleImagePaths = [
-                    storage_path('app/services-seed/images'),
-                    storage_path('app/images'),
-                    base_path('images'),
-                    base_path('storage/app/images'),
-                    public_path('images'),
-                ];
-                
-                foreach ($possibleImagePaths as $path) {
-                    if (is_dir($path)) {
-                        $imagesPath = $path;
-                        break;
-                    }
-                }
-                
-                if (!is_dir($imagesPath)) {
-                    $this->command->warn("Папка с изображениями не найдена. Пробовались пути:");
-                    foreach ($possibleImagePaths as $path) {
-                        $this->command->warn("  - {$path}");
-                    }
-                    $imagesPath = null;
-                }
-            }
-        }
-
-        $this->command->info("Используется CSV файл: {$csvPath}");
-        if ($imagesPath) {
-            $this->command->info("Папка с изображениями: {$imagesPath}");
-        }
-
         // Очистка старых данных (опционально, через флаг)
         $clearExisting = env('CLEAR_SERVICES_BEFORE_SEED', true); // По умолчанию очищаем
         
@@ -101,11 +40,27 @@ class ServicesFromCsvSeeder extends Seeder
         // Подготовка папок для медиа
         $this->prepareMediaFolders();
 
-        $this->command->info("Чтение CSV файла...");
+        // Загружаем встроенные данные из PHP файла
+        $this->command->info("Загрузка данных услуг...");
         
         try {
-            $rows = $this->readCsvFile($csvPath);
+            $dataFile = __DIR__ . '/ServicesData.php';
+            if (!file_exists($dataFile)) {
+                $this->command->error("Файл с данными не найден: {$dataFile}");
+                $this->command->info("Запустите generate-services-data.php для генерации данных");
+                return;
+            }
+            
+            $rows = require $dataFile;
             $this->command->info("Найдено строк: " . count($rows));
+            
+            // Получаем путь к папке с изображениями (опционально, для загрузки изображений)
+            $imagesPath = $this->findImagesPath();
+            if ($imagesPath) {
+                $this->command->info("Папка с изображениями: {$imagesPath}");
+            } else {
+                $this->command->warn("Папка с изображениями не найдена. Изображения не будут загружены.");
+            }
             
             $stats = [
                 'services' => 0,
@@ -274,28 +229,28 @@ class ServicesFromCsvSeeder extends Seeder
     }
 
     /**
-     * Читать CSV файл
+     * Найти папку с изображениями
      */
-    private function readCsvFile(string $path): array
+    private function findImagesPath(): ?string
     {
-        $rows = [];
-        $handle = fopen($path, 'r');
+        $possibleImagePaths = [
+            // Стандартные пути на сервере
+            storage_path('app/services-seed/images'),
+            storage_path('app/images'),
+            base_path('images'),
+            base_path('storage/app/images'),
+            public_path('images'),
+            // Локальная разработка
+            'C:\Users\dsc-2\Downloads\111_extracted\images',
+        ];
         
-        if ($handle === false) {
-            throw new \Exception("Не удалось открыть CSV файл: {$path}");
-        }
-
-        // Пропускаем заголовок
-        fgetcsv($handle, 0, ';');
-
-        while (($row = fgetcsv($handle, 0, ';')) !== false) {
-            if (count($row) > 0) {
-                $rows[] = $row;
+        foreach ($possibleImagePaths as $path) {
+            if (is_dir($path)) {
+                return $path;
             }
         }
-
-        fclose($handle);
-        return $rows;
+        
+        return null;
     }
 
     /**

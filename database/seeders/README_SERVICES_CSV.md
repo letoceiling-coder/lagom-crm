@@ -1,69 +1,39 @@
 # Инструкция по подготовке и выполнению ServicesFromCsvSeeder
 
-## Подготовка файлов для сервера
+## ✅ Готово! Данные встроены в сидер
 
-### Шаг 1: Подготовка файлов локально
+**Важно:** Данные из CSV файла уже встроены в `ServicesData.php`. На сервере **НЕ НУЖНО** загружать CSV файлы - просто запустите seed!
 
+## Подготовка данных (выполнено локально)
+
+Данные из CSV файла уже встроены в `database/seeders/ServicesData.php` (1.5 MB).
+
+Если нужно обновить данные из нового CSV файла:
 1. Распакуйте архив `111.zip` в папку `C:\Users\dsc-2\Downloads\111_extracted\`
-2. Убедитесь, что структура следующая:
+2. Запустите генератор данных:
+   ```bash
+   php generate-services-data.php
    ```
-   111_extracted/
-   ├── services.csv
-   └── images/
-       ├── services/
-       │   ├── _.png
-       │   ├── __1.png
-       │   └── ... (другие изображения)
-       └── icons/
-           ├── _.png
-           ├── __1.png
-           └── ... (другие иконки)
-   ```
+3. Файл `ServicesData.php` будет обновлен автоматически
 
-### Шаг 2: Загрузка файлов на сервер
+### Загрузка изображений на сервер (опционально)
 
-#### Вариант 1: Через FTP/SFTP
-1. Подключитесь к серверу через FTP/SFTP клиент
-2. Загрузите файлы в одну из следующих директорий:
-   - `/home/d/dsc23ytp/stroy/public_html/storage/app/` (рекомендуется)
-   - `/home/d/dsc23ytp/stroy/public_html/`
+Если нужно загрузить изображения на сервер:
 
-Структура на сервере должна быть:
+**Примечание:** Изображения опциональны. Сидер будет работать и без них, просто услуги будут без изображений.
+
+1. Подключитесь к серверу через FTP/SFTP
+2. Загрузите папку `images/` в `/home/d/dsc23ytp/stroy/public_html/storage/app/services-seed/`
+
+Структура на сервере (опционально):
 ```
-/home/d/dsc23ytp/stroy/public_html/storage/app/
-├── services.csv
+/home/d/dsc23ytp/stroy/public_html/storage/app/services-seed/
 └── images/
     ├── services/
     └── icons/
 ```
 
-#### Вариант 2: Через SSH (если есть доступ)
-```bash
-# На локальной машине (Windows PowerShell)
-cd C:\Users\dsc-2\Downloads\111_extracted
-scp -r services.csv images/ user@server:/home/d/dsc23ytp/stroy/public_html/storage/app/
-```
-
-#### Вариант 3: Через веб-интерфейс File Manager
-1. Войдите в панель управления хостингом
-2. Откройте File Manager
-3. Перейдите в `public_html/storage/app/`
-4. Загрузите `services.csv` и папку `images/`
-
-### Шаг 3: Настройка .env (опционально)
-
-Если файлы находятся в нестандартном месте, укажите путь в `.env`:
-```env
-SERVICES_CSV_PATH=/home/d/dsc23ytp/stroy/public_html/storage/app/services.csv
-CLEAR_SERVICES_BEFORE_SEED=true
-```
-
-### Шаг 4: Выполнение сидера
-
-#### Локально (для тестирования):
-```bash
-php artisan db:seed --class=ServicesFromCsvSeeder
-```
+### Выполнение сидера на сервере
 
 #### На сервере (через deploy):
 ```bash
@@ -75,6 +45,8 @@ php artisan deploy --with-seed --insecure
 cd /home/d/dsc23ytp/stroy/public_html
 php artisan db:seed --class=ServicesFromCsvSeeder
 ```
+
+**Важно:** CSV файл НЕ НУЖЕН на сервере! Все данные уже встроены в `ServicesData.php`.
 
 ## Что делает сидер
 
