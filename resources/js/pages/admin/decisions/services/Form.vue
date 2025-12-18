@@ -98,10 +98,6 @@ export default {
                         icon: data.data.icon || null,
                         order: data.data.order ?? 0,
                         is_active: data.data.is_active !== false,
-                        products: data.data.products || [],
-                        options: data.data.options || [],
-                        option_trees: data.data.option_trees || [],
-                        instances: data.data.instances || [],
                     };
                 }
             } catch (err) {

@@ -91,14 +91,6 @@ class ServiceController extends Controller
             'chapter_id' => 'nullable|exists:chapters,id',
             'order' => 'nullable|integer|min:0',
             'is_active' => 'nullable|boolean',
-            'products' => 'nullable|array',
-            'products.*' => 'exists:products,id',
-            'options' => 'nullable|array',
-            'options.*' => 'exists:options,id',
-            'option_trees' => 'nullable|array',
-            'option_trees.*' => 'exists:option_trees,id',
-            'instances' => 'nullable|array',
-            'instances.*' => 'exists:instances,id',
         ]);
 
         if ($validator->fails()) {
@@ -137,26 +129,9 @@ class ServiceController extends Controller
 
         $service = Service::create($data);
 
-        // Синхронизируем связи
-        if ($request->has('products')) {
-            $service->products()->sync($request->products);
-        }
-
-        if ($request->has('options')) {
-            $service->options()->sync($request->options);
-        }
-
-        if ($request->has('option_trees')) {
-            $service->optionTrees()->sync($request->option_trees);
-        }
-
-        if ($request->has('instances')) {
-            $service->instances()->sync($request->instances);
-        }
-
         return response()->json([
             'message' => 'Услуга успешно создана',
-            'data' => new ServiceResource($service->load(['image', 'icon', 'products', 'options', 'optionTrees', 'instances', 'chapter'])),
+            'data' => new ServiceResource($service->load(['image', 'icon', 'chapter'])),
         ], 201);
     }
 
@@ -165,7 +140,7 @@ class ServiceController extends Controller
      */
     public function show(string $id)
     {
-        $service = Service::with(['image', 'icon', 'products', 'options', 'optionTrees', 'instances', 'chapter'])->findOrFail($id);
+        $service = Service::with(['image', 'icon', 'chapter'])->findOrFail($id);
         
         return response()->json([
             'data' => new ServiceResource($service),
@@ -188,14 +163,6 @@ class ServiceController extends Controller
             'chapter_id' => 'nullable|exists:chapters,id',
             'order' => 'nullable|integer|min:0',
             'is_active' => 'nullable|boolean',
-            'products' => 'nullable|array',
-            'products.*' => 'exists:products,id',
-            'options' => 'nullable|array',
-            'options.*' => 'exists:options,id',
-            'option_trees' => 'nullable|array',
-            'option_trees.*' => 'exists:option_trees,id',
-            'instances' => 'nullable|array',
-            'instances.*' => 'exists:instances,id',
         ]);
 
         if ($validator->fails()) {
@@ -229,26 +196,9 @@ class ServiceController extends Controller
 
         $service->update($data);
 
-        // Синхронизируем связи
-        if ($request->has('products')) {
-            $service->products()->sync($request->products);
-        }
-
-        if ($request->has('options')) {
-            $service->options()->sync($request->options);
-        }
-
-        if ($request->has('option_trees')) {
-            $service->optionTrees()->sync($request->option_trees);
-        }
-
-        if ($request->has('instances')) {
-            $service->instances()->sync($request->instances);
-        }
-
         return response()->json([
             'message' => 'Услуга успешно обновлена',
-            'data' => new ServiceResource($service->load(['image', 'icon', 'products', 'options', 'optionTrees', 'instances', 'chapter'])),
+            'data' => new ServiceResource($service->load(['image', 'icon', 'chapter'])),
         ]);
     }
 
@@ -281,11 +231,6 @@ class ServiceController extends Controller
                 'image:id,name,disk,metadata,width,height',
                 'icon:id,name,disk,metadata',
                 'chapter:id,name',
-                'options:id,name',
-                'optionTrees' => function($query) {
-                    $query->where('parent', 0)->with('items');
-                },
-                'instances:id,name',
             ])
                 ->where('is_active', true)
                 ->where(function($query) use ($cleanSlug) {
