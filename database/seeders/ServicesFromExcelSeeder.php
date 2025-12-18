@@ -142,17 +142,27 @@ class ServicesFromExcelSeeder extends Seeder
             $descriptionData['detailed'] = $detailedText;
         }
         
-        return Service::updateOrCreate(
+        $service = Service::updateOrCreate(
             ['slug' => $slug],
             [
                 'name' => $name,
                 'slug' => $slug,
                 'description' => !empty($descriptionData) ? $descriptionData : null,
-                'html_content' => !empty($htmlText) ? $htmlText : null,
                 'order' => $order,
                 'is_active' => true,
             ]
         );
+        
+        // Обновляем html_content отдельно, чтобы гарантировать обновление даже если поле null
+        if (!empty($htmlText)) {
+            $service->html_content = $htmlText;
+            $service->save();
+        } elseif ($htmlText === '' && $service->html_content !== null) {
+            // Если в Excel пусто, но в базе есть значение - оставляем как есть
+            // Не обновляем, чтобы не потерять существующие данные
+        }
+        
+        return $service;
     }
     
     private function createOrUpdateChapter($name, $order)
