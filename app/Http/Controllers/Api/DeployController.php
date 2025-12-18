@@ -96,14 +96,36 @@ class DeployController extends Controller
                 throw new \Exception("Ошибка миграций: {$migrationsResult['error']}");
             }
 
-            // 3.5. Принудительное выполнение миграций перед seeders (если запрошены seeders)
+            // 3.5. Проверка и принудительное выполнение конкретной миграции перед seeders
             $runSeeders = $request->input('run_seeders', false);
             if ($runSeeders) {
-                // Выполняем миграции еще раз перед seeders, чтобы убедиться, что все миграции применены
-                Log::info('Повторное выполнение миграций перед seeders...');
-                $migrationsBeforeSeed = $this->runMigrations();
-                if ($migrationsBeforeSeed['status'] === 'success') {
-                    Log::info("Миграции перед seeders: {$migrationsBeforeSeed['message']}");
+                // Проверяем, существует ли поле html_content в таблице services
+                try {
+                    $hasHtmlContent = \Illuminate\Support\Facades\Schema::hasColumn('services', 'html_content');
+                    if (!$hasHtmlContent) {
+                        Log::info('Поле html_content не найдено в таблице services, выполняем миграцию принудительно...');
+                        // Выполняем конкретную миграцию принудительно
+                        $migrationProcess = Process::path($this->basePath)
+                            ->run("{$this->phpPath} artisan migrate --path=database/migrations/2025_12_18_193853_add_html_content_to_services_table.php --force");
+                        
+                        if ($migrationProcess->successful()) {
+                            Log::info('Миграция html_content выполнена успешно');
+                        } else {
+                            Log::warning('Ошибка при выполнении миграции html_content: ' . $migrationProcess->errorOutput());
+                        }
+                    } else {
+                        Log::info('Поле html_content уже существует в таблице services');
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Ошибка при проверке поля html_content: ' . $e->getMessage());
+                    // Пытаемся выполнить миграцию в любом случае
+                    try {
+                        $migrationProcess = Process::path($this->basePath)
+                            ->run("{$this->phpPath} artisan migrate --path=database/migrations/2025_12_18_193853_add_html_content_to_services_table.php --force");
+                        Log::info('Миграция html_content выполнена (fallback)');
+                    } catch (\Exception $e2) {
+                        Log::error('Критическая ошибка при выполнении миграции: ' . $e2->getMessage());
+                    }
                 }
             }
             
