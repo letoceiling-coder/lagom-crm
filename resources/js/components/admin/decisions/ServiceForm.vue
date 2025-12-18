@@ -24,6 +24,7 @@
             <label class="text-sm font-medium mb-1 block">Раздел</label>
             <select
                 v-model="localForm.chapter_id"
+                @change="fetchCasesForChapter"
                 class="w-full h-10 px-3 border border-border rounded bg-background focus:outline-none focus:ring-2 focus:ring-accent"
             >
                 <option :value="null">Не выбран</option>
@@ -35,6 +36,39 @@
                     {{ chapter.name }}
                 </option>
             </select>
+        </div>
+        <div v-if="localForm.chapter_id && casesForChapter.length > 0">
+            <label class="text-sm font-medium mb-1 block">Случаи в этом разделе</label>
+            <div class="border border-border rounded-lg p-3 max-h-48 overflow-y-auto bg-muted/5">
+                <div class="space-y-1">
+                    <div
+                        v-for="caseItem in casesForChapter"
+                        :key="caseItem.id"
+                        class="text-sm text-muted-foreground flex items-center gap-2"
+                    >
+                        <span class="w-2 h-2 rounded-full bg-accent"></span>
+                        {{ caseItem.name }}
+                    </div>
+                </div>
+            </div>
+            <p class="text-xs text-muted-foreground mt-1">
+                Всего случаев: {{ casesForChapter.length }}. 
+                <router-link 
+                    :to="{ name: 'admin.decisions.cases', query: { chapter_id: localForm.chapter_id } }"
+                    class="text-accent hover:underline"
+                >
+                    Управление случаями
+                </router-link>
+            </p>
+        </div>
+        <div v-else-if="localForm.chapter_id && !loadingCases" class="text-sm text-muted-foreground">
+            В этом разделе пока нет случаев. 
+            <router-link 
+                :to="{ name: 'admin.decisions.cases.create', query: { chapter_id: localForm.chapter_id } }"
+                class="text-accent hover:underline"
+            >
+                Создать случай
+            </router-link>
         </div>
         <div>
             <label class="text-sm font-medium mb-1 block">Изображение</label>
@@ -211,6 +245,8 @@ export default {
     emits: ['submit', 'cancel'],
     setup(props, { emit }) {
         const chapters = ref([]);
+        const casesForChapter = ref([]);
+        const loadingCases = ref(false);
         const showImageMediaModal = ref(false);
         const showIconMediaModal = ref(false);
         const selectedImage = ref(null);
@@ -234,6 +270,27 @@ export default {
                 }
             } catch (err) {
                 console.error('Error fetching chapters:', err);
+            }
+        };
+
+        const fetchCasesForChapter = async () => {
+            if (!localForm.value.chapter_id) {
+                casesForChapter.value = [];
+                return;
+            }
+            
+            loadingCases.value = true;
+            try {
+                const response = await apiGet(`/cases?chapter_id=${localForm.value.chapter_id}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    casesForChapter.value = data.data || [];
+                }
+            } catch (err) {
+                console.error('Error fetching cases:', err);
+                casesForChapter.value = [];
+            } finally {
+                loadingCases.value = false;
             }
         };
 
@@ -286,7 +343,16 @@ export default {
             if (newData.icon) {
                 selectedIcon.value = newData.icon;
             }
+            // Загружаем случаи для выбранного раздела
+            if (newData.chapter_id) {
+                fetchCasesForChapter();
+            }
         }, { deep: true });
+
+        // Отслеживаем изменение раздела
+        watch(() => localForm.value.chapter_id, () => {
+            fetchCasesForChapter();
+        });
 
         const handleSubmit = () => {
             emit('submit', {
@@ -312,10 +378,16 @@ export default {
             if (props.initialData.icon) {
                 selectedIcon.value = props.initialData.icon;
             }
+            // Загружаем случаи для выбранного раздела
+            if (props.initialData.chapter_id) {
+                fetchCasesForChapter();
+            }
         });
 
         return {
             chapters,
+            casesForChapter,
+            loadingCases,
             localForm,
             showImageMediaModal,
             showIconMediaModal,
@@ -327,6 +399,7 @@ export default {
             handleIconSelected,
             removeImage,
             removeIcon,
+            fetchCasesForChapter,
             handleSubmit,
             handleCancel,
         };

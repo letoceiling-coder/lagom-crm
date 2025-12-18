@@ -439,6 +439,24 @@ const routes = [
                 meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
             },
             {
+                path: 'decisions/cases',
+                name: 'admin.decisions.cases',
+                component: () => import('./pages/admin/decisions/Cases.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
+            },
+            {
+                path: 'decisions/cases/create',
+                name: 'admin.decisions.cases.create',
+                component: () => import('./pages/admin/decisions/cases/Form.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
+            },
+            {
+                path: 'decisions/cases/:id/edit',
+                name: 'admin.decisions.cases.edit',
+                component: () => import('./pages/admin/decisions/cases/Form.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
+            },
+            {
                 path: 'decisions/options',
                 name: 'admin.decisions.options',
                 component: () => import('./pages/admin/decisions/Options.vue'),
