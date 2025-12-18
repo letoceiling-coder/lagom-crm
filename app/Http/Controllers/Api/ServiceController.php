@@ -53,7 +53,12 @@ class ServiceController extends Controller
         // Не используем кеш для списка услуг, так как данные могут быть слишком большими для таблицы cache
         try {
             // Для списка услуг загружаем только необходимые связи
-            $query = Service::with(['image', 'icon'])->ordered();
+            // Если minimal=1, загружаем только icon (для карточек)
+            if ($request->boolean('minimal', false)) {
+                $query = Service::with(['icon:id,name,disk,metadata'])->ordered();
+            } else {
+                $query = Service::with(['image:id,name,disk,metadata,width,height', 'icon:id,name,disk,metadata'])->ordered();
+            }
 
             if ($request->has('chapter_id')) {
                 $query->where('chapter_id', $request->chapter_id);
