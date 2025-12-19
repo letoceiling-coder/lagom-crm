@@ -1,7 +1,11 @@
 <template>
     <header class="relative flex h-16 items-center justify-between border-b border-border bg-card backdrop-blur-xl px-4 sm:px-6 gap-2 sm:gap-4 z-30">
         <div class="flex items-center gap-2 sm:gap-3 min-w-0">
-            <button class="lg:hidden flex-shrink-0 h-11 w-11 flex items-center justify-center rounded-md hover:bg-accent/10 transition-colors">
+            <button 
+                @click="toggleMobileSidebar"
+                class="lg:hidden flex-shrink-0 h-11 w-11 flex items-center justify-center rounded-md hover:bg-accent/10 transition-colors"
+                type="button"
+            >
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                 </svg>
@@ -232,12 +236,17 @@ export default {
             store.dispatch('toggleTheme');
         };
 
+        const toggleMobileSidebar = () => {
+            window.dispatchEvent(new Event('toggle-mobile-sidebar'));
+        };
+
         return {
             user,
             userInitials,
             currentPageTitle,
             isDarkMode,
             toggleTheme,
+            toggleMobileSidebar,
             breadcrumbs,
         };
     },

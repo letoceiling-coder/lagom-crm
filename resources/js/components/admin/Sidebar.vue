@@ -1,15 +1,40 @@
 <template>
+    <!-- Overlay для мобильной версии -->
+    <div
+        v-if="isMobileSidebarOpen"
+        class="fixed inset-0 bg-black/50 z-40 lg:hidden transition-opacity duration-300"
+        @click="closeMobileSidebar"
+    ></div>
+    
     <aside
-        class="relative flex flex-col bg-sidebar-background text-sidebar-foreground transition-all duration-300 border-r border-sidebar-border hidden lg:flex"
-        :class="isCollapsed ? 'lg:w-16' : 'lg:w-72'"
+        class="relative flex flex-col bg-sidebar-background text-sidebar-foreground transition-all duration-300 border-r border-sidebar-border fixed lg:static inset-y-0 left-0 z-50 lg:z-auto"
+        :class="[
+            isCollapsed ? 'lg:w-16' : 'lg:w-72',
+            isMobileSidebarOpen ? 'flex w-72' : 'hidden lg:flex'
+        ]"
     >
         <div class="flex h-16 items-center border-b border-sidebar-border justify-between px-6">
-            <h1 v-if="!isCollapsed" class="text-xl font-bold text-sidebar-foreground">CMS Admin</h1>
-            <button
-                @click="toggleCollapse"
-                class="rounded-xl p-2 hover:bg-sidebar-accent transition-all"
-                :title="isCollapsed ? 'Развернуть меню' : 'Свернуть меню'"
-            >
+            <h1 v-show="!isCollapsed || isMobileSidebarOpen" class="text-xl font-bold text-sidebar-foreground">CMS Admin</h1>
+            <div class="flex items-center gap-2">
+                <!-- Кнопка закрытия для мобильной версии -->
+                <button
+                    v-if="isMobileSidebarOpen"
+                    @click="closeMobileSidebar"
+                    class="lg:hidden rounded-xl p-2 hover:bg-sidebar-accent transition-all"
+                    type="button"
+                    title="Закрыть меню"
+                >
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+                <!-- Кнопка сворачивания для десктопа -->
+                <button
+                    @click="toggleCollapse"
+                    class="hidden lg:block rounded-xl p-2 hover:bg-sidebar-accent transition-all"
+                    :title="isCollapsed ? 'Развернуть меню' : 'Свернуть меню'"
+                    type="button"
+                >
                 <svg
                     class="h-5 w-5 transition-transform duration-300"
                     :class="isCollapsed ? 'rotate-180' : ''"
@@ -19,7 +44,8 @@
                 >
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                 </svg>
-            </button>
+                </button>
+            </div>
         </div>
         <nav class="flex-1 overflow-y-auto space-y-1 nav-scroll p-4">
             <div v-if="!menu || menu.length === 0" class="text-center text-muted-foreground py-8">
@@ -111,7 +137,7 @@
 </template>
 
 <script>
-import { computed, ref, onMounted, watch } from 'vue';
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 
@@ -142,6 +168,7 @@ export default {
         const router = useRouter();
         const expandedItems = ref([]);
         const isCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true');
+        const isMobileSidebarOpen = ref(false);
 
         const menu = computed(() => store.getters.menu);
         const user = computed(() => store.getters.user);
@@ -155,12 +182,32 @@ export default {
             }
         };
         
+        const handleToggleMobileSidebar = () => {
+            isMobileSidebarOpen.value = !isMobileSidebarOpen.value;
+        };
+
+        const handleRouteChange = () => {
+            if (window.innerWidth < 1024) {
+                isMobileSidebarOpen.value = false;
+            }
+        };
+
+        const closeMobileSidebar = () => {
+            isMobileSidebarOpen.value = false;
+        };
+
         // Загружаем меню при монтировании компонента
         onMounted(() => {
             if (store.getters.isAuthenticated) {
                 // Всегда загружаем меню при монтировании, чтобы получить актуальное
                 store.dispatch('fetchMenu');
             }
+            window.addEventListener('toggle-mobile-sidebar', handleToggleMobileSidebar);
+            router.afterEach(handleRouteChange);
+        });
+
+        onUnmounted(() => {
+            window.removeEventListener('toggle-mobile-sidebar', handleToggleMobileSidebar);
         });
         
         // Отслеживаем изменения меню для отладки
@@ -221,11 +268,13 @@ export default {
             userInitials,
             expandedItems,
             isCollapsed,
+            isMobileSidebarOpen,
             toggleCollapse,
             toggleExpanded,
             isExpanded,
             getIconComponent,
             handleLogout,
+            closeMobileSidebar,
         };
     },
 };
